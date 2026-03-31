@@ -167,11 +167,7 @@ export default function Editor({ onNavigate }: EditorProps) {
     return `Saved at ${lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
-  const [isEarlyAccessRequested, setIsEarlyAccessRequested] = React.useState(false);
 
-  const handleEarlyAccess = () => {
-    setIsEarlyAccessRequested(true);
-  };
 
   return (
     <div className="fixed inset-0 w-screen h-screen bg-neutral-50 text-neutral-900 overflow-hidden text-sm select-none font-sans flex flex-col pt-16 z-50">
