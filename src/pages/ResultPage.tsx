@@ -245,7 +245,7 @@ export default function ResultPage({ onNavigate }: ResultPageProps) {
             <div className="space-y-3">
               <a 
                 href={isProcessing ? '#' : videoUrl}
-                download={isProcessing ? undefined : `virelo-animation-${Date.now()}.mp4`}
+                download={isProcessing ? undefined : `ixnel-animation-${Date.now()}.mp4`}
                 target={isProcessing ? undefined : "_blank"}
                 rel={isProcessing ? undefined : "noopener noreferrer"}
                 onClick={(e) => isProcessing && e.preventDefault()}

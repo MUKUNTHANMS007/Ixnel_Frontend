@@ -47,7 +47,7 @@ export function TransitionTester({ onNavigate }: TransitionTesterProps) {
 
       <div className="text-center mb-10">
         <h3 className="text-2xl font-bold text-neutral-900 mb-2">Temporal Transition Tester</h3>
-        <p className="text-neutral-500">Upload two frames to simulate a Virelo AI transition</p>
+        <p className="text-neutral-500">Upload two frames to simulate a Ixnel AI transition</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
@@ -124,7 +124,7 @@ export function TransitionTester({ onNavigate }: TransitionTesterProps) {
             AI Interpolation Successful
           </div>
           <p className="text-sm text-emerald-600 text-center max-w-md">
-            The transitions between your frames have been processed by the Virelo Engine. You can now download the results below.
+            The transitions between your frames have been processed by the Ixnel Engine. You can now download the results below.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
             <a

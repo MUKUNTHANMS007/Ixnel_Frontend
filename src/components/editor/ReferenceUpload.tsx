@@ -50,7 +50,8 @@ export function ReferenceUpload() {
         const formData = new FormData();
         formData.append('reference', file);
 
-        const uploadRes = await fetch(`http://localhost:5000/api/projects/${activeProjectId}/reference`, {
+        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const uploadRes = await fetch(`${apiBase}/projects/${activeProjectId}/reference`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`

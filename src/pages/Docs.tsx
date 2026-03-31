@@ -62,7 +62,7 @@ const Docs = () => {
   const navigation = [
     {
       title: 'Getting Started',
-      items: ['Introduction', 'Virelo Engine Workflow']
+      items: ['Introduction', 'Ixnel Engine Workflow']
     },
     {
       title: 'Core Features',
@@ -90,14 +90,14 @@ const Docs = () => {
         return (
           <div className="space-y-6">
             <p className="text-lg text-neutral-600 leading-relaxed">
-              Welcome to <strong>Virelo (The Hybrid 2D/3D Animation Pipeline)</strong>. This platform allows you to create fully realized scenes directly in your browser without any prior installation or heavy software.
+              Welcome to <strong>Ixnel (The Hybrid 2D/3D Animation Pipeline)</strong>. This platform allows you to create fully realized scenes directly in your browser without any prior installation or heavy software.
             </p>
             <p className="text-lg text-neutral-600 leading-relaxed">
               You can spawn primitive shapes, move them around the scene, adjust the lighting environment to cast accurate shadows, sculpt meshes organically, and export your final creation to be used anywhere.
             </p>
             <ImagePlaceholder 
               src="/docs/editor-overview.png" 
-              alt="Overview of the Virelo interface" 
+              alt="Overview of the Ixnel interface" 
               caption="The main editor interface featuring the canvas, sidebars, and top navigation"
             />
           </div>
@@ -108,7 +108,7 @@ const Docs = () => {
             <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex items-start gap-3">
               <div className="w-2 h-2 mt-2 rounded-full bg-indigo-500 animate-pulse flex-shrink-0" />
               <p className="text-indigo-800 font-medium text-sm leading-relaxed">
-                Virelo now uses <strong>ToonCrafter</strong> as its AI interpolation engine. ToonCrafter synthesises <strong>16 in-between frames</strong> from your start and end pose captures, producing smooth, stylised 2D animation directly from 3D scene data.
+                Ixnel now uses <strong>ToonCrafter</strong> as its AI interpolation engine. ToonCrafter synthesises <strong>16 in-between frames</strong> from your start and end pose captures, producing smooth, stylised 2D animation directly from 3D scene data.
               </p>
             </div>
 
@@ -123,10 +123,10 @@ const Docs = () => {
               <h3 className="text-xl font-bold text-neutral-800 mb-4">How the Pipeline Works</h3>
               <ul className="space-y-6">
                 {[
-                  { step: 1, title: 'Pose in 3D Workspace', desc: 'Arrange your scene in the Virelo editor. Use Onion Skinning to compare keyframes and build fluid motion arcs.' },
+                  { step: 1, title: 'Pose in 3D Workspace', desc: 'Arrange your scene in the Ixnel editor. Use Onion Skinning to compare keyframes and build fluid motion arcs.' },
                   { step: 2, title: 'Capture to Sketch', desc: 'Save your project. The editor captures the Three.js canvas, applies binarisation, and encodes the sketch as JSON.' },
                   { step: 3, title: 'Upload Character Reference (Optional)', desc: 'Upload a .PSD or .CLIP character sheet and click "Personalize AI Model" to fine-tune ToonCrafter for your character.' },
-                  { step: 4, title: 'ToonCrafter Interpolation', desc: 'The Virelo ToonCrafter Worker receives your start and end sketches, runs 16-frame interpolation, and produces an MP4.' },
+                  { step: 4, title: 'ToonCrafter Interpolation', desc: 'The Ixnel ToonCrafter Worker receives your start and end sketches, runs 16-frame interpolation, and produces an MP4.' },
                   { step: 5, title: 'Receive MP4 + Layered PSD', desc: 'Download the video or the fully layered PSD where every interpolated frame is a separate Photoshop layer.' },
                 ].map(({ step, title, desc }) => (
                   <li key={step} className="flex gap-4">
@@ -161,19 +161,19 @@ const Docs = () => {
 
             <div>
               <h3 className="text-xl font-bold text-neutral-800 mb-3">Starting the Worker</h3>
-              <pre className="bg-neutral-900 text-emerald-400 rounded-xl p-5 text-sm overflow-x-auto font-mono leading-relaxed">{`cd virelo-tooncrafter-worker\npip install -r requirements.txt\npython main.py  # Starts on port 8001`}</pre>
+              <pre className="bg-neutral-900 text-emerald-400 rounded-xl p-5 text-sm overflow-x-auto font-mono leading-relaxed">{`cd ixnel-tooncrafter-worker\npip install -r requirements.txt\npython main.py  # Starts on port 8001`}</pre>
               <p className="text-sm text-neutral-500 mt-3 font-medium">
                 Without model weights, the worker uses high-quality sample videos as a fallback so your frontend pipeline stays fully functional during development.
               </p>
             </div>
           </div>
         );
-      case 'Virelo Engine Workflow':
+      case 'Ixnel Engine Workflow':
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-neutral-800">Virelo Engine Workflow</h2>
+            <h2 className="text-2xl font-bold text-neutral-800">Ixnel Engine Workflow</h2>
             <p className="text-lg text-neutral-600 leading-relaxed">
-              The Virelo engine empowers creators to bridge the gap between 3D space and 2D animation styles using our hybrid pipeline.
+              The Ixnel engine empowers creators to bridge the gap between 3D space and 2D animation styles using our hybrid pipeline.
             </p>
             <ul className="space-y-6 my-8">
               <li className="flex gap-4">
@@ -313,7 +313,7 @@ const Docs = () => {
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-neutral-800">Managing the Workspace</h2>
             <p className="text-lg text-neutral-600 leading-relaxed">
-              Virelo provides a flexible, expansive environment and professional tools to keep your creative process smooth.
+              Ixnel provides a flexible, expansive environment and professional tools to keep your creative process smooth.
             </p>
             <div className="space-y-4 mt-6">
               <div className="p-5 rounded-xl border border-neutral-200 bg-white shadow-sm flex gap-4">
@@ -351,7 +351,7 @@ const Docs = () => {
                 <div>
                   <h3 className="font-semibold text-neutral-800 text-base mb-1">Navigating the Expanded Studio</h3>
                   <p className="text-sm text-neutral-600 leading-relaxed">
-                    Virelo features an ultra-wide infinite grid and deep camera clipping planes, providing you immense space for sprawling cinematic environments.
+                    Ixnel features an ultra-wide infinite grid and deep camera clipping planes, providing you immense space for sprawling cinematic environments.
                     If you get lost, just click the <strong>Reset Camera</strong> (Home icon) button on the top toolbar to instantly return to the original default viewpoint.
                   </p>
                 </div>
@@ -445,7 +445,7 @@ const Docs = () => {
         return (
           <div className="space-y-6">
             <p className="text-lg text-neutral-600 leading-relaxed">
-              For professional cleanup and frame-by-frame painting, export your AI sequences as layered PSD files. This preserves the individual frames generated by the Virelo engine as separate, editable layers.
+              For professional cleanup and frame-by-frame painting, export your AI sequences as layered PSD files. This preserves the individual frames generated by the Ixnel engine as separate, editable layers.
             </p>
             <ul className="space-y-4 my-8">
               <li className="flex gap-4">

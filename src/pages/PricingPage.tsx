@@ -7,6 +7,7 @@ interface PricingPlan {
   price: {
     monthly: string;
     yearly: string;
+    oneTime?: string;
   };
   description: string;
   features: string[];
@@ -16,7 +17,7 @@ interface PricingPlan {
   color: string;
 }
 
-const plans: PricingPlan[] = [
+const animatorPlans: PricingPlan[] = [
   {
     name: "Starter",
     price: { monthly: "$0", yearly: "$0" },
@@ -26,7 +27,7 @@ const plans: PricingPlan[] = [
     features: [
       "5 Generations / month",
       "Standard Resolution (720p)",
-      "Standard AniDoc Inference",
+      "Standard AI Interpolation",
       "Community Support",
       "Basic PSD Fallback Export",
       "Public Gallery Access"
@@ -36,25 +37,25 @@ const plans: PricingPlan[] = [
   {
     name: "Professional",
     price: { monthly: "$29", yearly: "$24" },
-    description: "For creators who need high-fidelity results and unlimited power.",
+    description: "For professional creators who need high-fidelity results.",
     icon: <Crown className="w-6 h-6" />,
     color: "indigo",
     popular: true,
     features: [
       "Unlimited Generations",
       "4K Ultra High Fidelity",
-      "High-Fidelity Fine-Tuned Weights",
+      "Fine-Tuned Character Weights",
       "Real Layered PSD Export",
       "Model Personalization (5 Characters)",
       "Priority GPU Queue Access",
-      "Advanced 3D Onion Skinning"
+      "Advanced AI Motion Smoothing"
     ],
     cta: "Upgrade to Pro"
   },
   {
-    name: "Enterprise",
+    name: "Studio",
     price: { monthly: "Custom", yearly: "Custom" },
-    description: "Dedicated infrastructure and support for animation studios.",
+    description: "Dedicated infrastructure for animation studios.",
     icon: <Building2 className="w-6 h-6" />,
     color: "purple",
     features: [
@@ -62,7 +63,7 @@ const plans: PricingPlan[] = [
       "Multi-User Team License",
       "Custom Model Training",
       "On-Premise Private Cluster",
-      "Dedciated Solutions Architect",
+      "Dedicated Solutions Architect",
       "SLA & Custom Contracts",
       "White-label Exports"
     ],
@@ -70,23 +71,59 @@ const plans: PricingPlan[] = [
   }
 ];
 
+const nonAnimatorPlans: PricingPlan[] = [
+  {
+    name: "Casual",
+    price: { monthly: "$9", yearly: "$7" },
+    description: "For simple AI-assisted visuals and quick renders.",
+    icon: <Sparkles className="w-6 h-6" />,
+    color: "amber",
+    features: [
+      "20 Generations / month",
+      "Standard HD Resolution",
+      "Basic AI Enhancement",
+      "Cloud Storage (10GB)",
+      "Standard Support"
+    ],
+    cta: "Get Started"
+  },
+  {
+    name: "Credit Pack",
+    price: { monthly: "$15", yearly: "$15", oneTime: "$15" },
+    description: "One-time credit recharge. No subscription required.",
+    icon: <Layers className="w-6 h-6" />,
+    color: "rose",
+    features: [
+      "50 Generation Credits",
+      "Never Expires",
+      "4K Rendering Support",
+      "Priority Single Queue",
+      "Easy UPI/Card Checkout"
+    ],
+    cta: "Buy Credits"
+  }
+];
+
 const faqs = [
   {
     q: "How does 'Model Personalization' work?",
-    a: "Our engine uses a simulated fine-tuning process that analyzes your character sheet (PSD/CLIP) to ensure the AI maintains consistent details like clothing folds and facial features across every frame."
+    a: "Our engine uses a simulated process that analyzes your character sheet (PSD/CLIP) to ensure the AI maintains consistent details across every frame."
   },
   {
     q: "Can I cancel my subscription at any time?",
-    a: "Yes! There are no long-term contracts for Monthly plans. If you choose Yearly, you save 20% but commit to a full year of 4K rendering power."
+    a: "Yes! There are no long-term contracts for Monthly plans. If you choose Yearly, you save 20% on professional rendering power."
   },
   {
-    q: "What is 'Real Layered PSD Export'?",
-    a: "Unlike standard AI generators that give you flat videos, TemporalAI exports an authentic Photoshop file with every animation frame on its own layer, perfectly aligned for final cleanup."
+    q: "What payment methods do you support?",
+    a: "We currently support Credit/Debit cards via Razorpay for domestic and international payments. UPI and other local methods are being integrated."
   }
 ];
 
 export default function PricingPage() {
   const [isYearly, setIsYearly] = useState(false);
+  const [segment, setSegment] = useState<'animator' | 'non-animator'>('animator');
+
+  const currentPlans = segment === 'animator' ? animatorPlans : nonAnimatorPlans;
 
   return (
     <div className="w-full min-h-screen bg-white relative overflow-hidden">
@@ -96,21 +133,46 @@ export default function PricingPage() {
 
       <div className="max-w-7xl mx-auto px-6 pt-12 pb-32 relative z-10">
         {/* Header */}
-        <div className="text-center mb-20">
+        <div className="text-center mb-16">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-sm font-bold mb-6"
           >
             <Sparkles className="w-4 h-4 fill-current" />
-            Simple, Transparent Pricing
+            Flexible Pricing for Everyone
           </motion.div>
           
           <h1 className="text-5xl md:text-7xl font-black text-neutral-900 tracking-tight mb-6">
             Pick your <span className="text-indigo-600">Power tier.</span>
           </h1>
+          
+          {/* Segment Selector */}
+          <div className="flex items-center justify-center p-1.5 bg-neutral-100 rounded-2xl w-fit mx-auto mb-10 border border-neutral-200">
+            <button
+              onClick={() => setSegment('animator')}
+              className={`px-8 py-3 rounded-xl text-sm font-bold transition-all ${
+                segment === 'animator' 
+                  ? 'bg-white text-indigo-600 shadow-sm border border-indigo-100' 
+                  : 'text-neutral-500 hover:text-neutral-900'
+              }`}
+            >
+              Animator Segment
+            </button>
+            <button
+              onClick={() => setSegment('non-animator')}
+              className={`px-8 py-3 rounded-xl text-sm font-bold transition-all ${
+                segment === 'non-animator' 
+                  ? 'bg-white text-indigo-600 shadow-sm border border-indigo-100' 
+                  : 'text-neutral-500 hover:text-neutral-900'
+              }`}
+            >
+              Non-Animators
+            </button>
+          </div>
+
           <p className="text-xl text-neutral-500 max-w-2xl mx-auto">
-            From solo hobbyists to full-scale studios, there's an AniDoc plan built for your workflow.
+            Tailored plans for professional creators and casual enthusiasts alike.
           </p>
 
           {/* Toggle */}
@@ -129,8 +191,8 @@ export default function PricingPage() {
         </div>
 
         {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-32">
-          {plans.map((plan, idx) => (
+        <div className={`grid grid-cols-1 md:grid-cols-${currentPlans.length} gap-8 mb-32 max-w-6xl mx-auto`}>
+          {currentPlans.map((plan, idx) => (
             <motion.div
               key={plan.name}
               initial={{ opacity: 0, y: 30 }}
@@ -188,7 +250,7 @@ export default function PricingPage() {
           ))}
         </div>
 
-        {/* Feature Comparison Mini-Section */}
+        {/* Feature Comparison */}
         <section className="mb-32">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-black text-neutral-900 mb-4">Compare capabilities</h2>
@@ -198,9 +260,9 @@ export default function PricingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               { icon: <Shield className="w-5 h-5" />, title: "Secure Pipeline", desc: "Private sessions and encrypted scene storage." },
-              { icon: <Cpu className="w-5 h-5" />, title: "GPU Clusters", desc: "Instantly queue your frames on our H100 networks." },
+              { icon: <Cpu className="w-5 h-5" />, title: "GPU Clusters", desc: "Instantly queue your frames on our high-speed networks." },
               { icon: <Layers className="w-5 h-5" />, title: "Multilayer PSD", desc: "The only AI engine providing native .PSD output." },
-              { icon: <Check className="w-5 h-5" />, title: "Verified Weights", desc: "Official CVPR 2025 AniDoc implementation." },
+              { icon: <Check className="w-5 h-5" />, title: "Verified Results", desc: "Advanced motion vectors for smooth frame consistency." },
             ].map((f, i) => (
               <div key={i} className="p-6 rounded-2xl border border-neutral-100 bg-neutral-50/50 hover:bg-white hover:border-indigo-100 hover:shadow-xl transition-all group">
                 <div className="w-10 h-10 rounded-xl bg-white border border-neutral-200 flex items-center justify-center text-neutral-400 mb-4 group-hover:text-indigo-600 transition-colors">

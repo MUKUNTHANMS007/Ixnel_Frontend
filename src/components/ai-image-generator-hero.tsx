@@ -11,7 +11,7 @@ interface ImageCard {
 }
 
 interface ImageCarouselHeroProps {
-  title: string
+  title: React.ReactNode
   subtitle: string
   description: string
   ctaText: string

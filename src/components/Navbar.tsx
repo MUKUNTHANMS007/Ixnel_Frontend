@@ -45,7 +45,7 @@ export default function Navbar({ onNavigate }: NavbarProps) {
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center">
              <div className="w-4 h-4 bg-white rounded-sm" />
           </div>
-          <span className="font-bold text-xl tracking-tight text-neutral-900">Virelo</span>
+          <span className="font-bold text-xl tracking-tight text-neutral-900">Ixnel</span>
         </div>
 
         {/* Desktop Navigation */}

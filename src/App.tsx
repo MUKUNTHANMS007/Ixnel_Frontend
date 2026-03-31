@@ -4,18 +4,19 @@ import Footer from './components/Footer';
 import Home from './pages/Home';
 import Docs from './pages/Docs';
 import News from './pages/News';
-import Products from './pages/Products';
 import Projects from './pages/Projects';
 import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
-import Editor from './pages/Editor';
 import ResultPage from './pages/ResultPage';
 import PricingPage from './pages/PricingPage';
+import PipelinePage from './pages/PipelinePage';
+import FeedbackPage from './pages/FeedbackPage';
+import Editor from './pages/Editor';
 import { useAuthStore } from './store/authStore';
-import { Home as HomeIcon, Package, FileText, Newspaper, Users, LogIn, LogOut, LayoutDashboard, FolderOpen, Sparkles } from 'lucide-react';
+import { Home as HomeIcon, FileText, Newspaper, LogIn, LogOut, FolderOpen, Sparkles, Video, MessageSquare, Box } from 'lucide-react';
 
 export default function App() {
-  const [activePage, setActivePage] = useState('products');
+  const [activePage, setActivePage] = useState('home');
   const { isAuthenticated, fetchMe, logout, user } = useAuthStore();
 
   // Restore session on mount
@@ -25,7 +26,7 @@ export default function App() {
 
   const handleLogout = () => {
     logout();
-    setActivePage('products');
+    setActivePage('home');
   };
 
   const handleNavigation = (page: string) => {
@@ -38,13 +39,13 @@ export default function App() {
 
   const navItems = [
     { name: 'Home', id: 'home', icon: HomeIcon },
-    { name: 'Products', id: 'products', icon: Package },
+    { name: 'Pipeline', id: 'pipeline', icon: Video },
     { name: 'Pricing', id: 'pricing', icon: Sparkles },
     { name: 'Docs', id: 'docs', icon: FileText },
-    { name: 'Editor', id: 'editor', icon: LayoutDashboard },
     { name: 'Projects', id: 'projects', icon: FolderOpen },
+    { name: 'Editor', id: 'editor', icon: Box },
     { name: 'News', id: 'news', icon: Newspaper },
-    { name: 'About', id: 'about', icon: Users },
+    { name: 'Feedback', id: 'feedback', icon: MessageSquare },
     ...(isAuthenticated
       ? [{ name: 'Logout', id: 'logout', icon: LogOut }]
       : [{ name: 'Login', id: 'signin', icon: LogIn }]),
@@ -54,11 +55,12 @@ export default function App() {
     switch (activePage) {
       case 'home': return <Home onNavigate={setActivePage} />;
       case 'docs': return <Docs />;
-      case 'editor': return <Editor onNavigate={setActivePage} />;
       case 'news': return <News />;
-      case 'products': return <Products onNavigate={setActivePage} />;
+      case 'pipeline': return <PipelinePage />;
       case 'projects': return <Projects onNavigate={setActivePage} />;
       case 'pricing': return <PricingPage />;
+      case 'editor': return <Editor onNavigate={setActivePage} />;
+      case 'feedback': return <FeedbackPage />;
       case 'signin': return <SignIn onNavigate={setActivePage} />;
       case 'signup': return <SignUp onNavigate={setActivePage} />;
       case 'result': return <ResultPage onNavigate={setActivePage} />;

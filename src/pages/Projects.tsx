@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { FolderOpen, Plus, Clock, Box, Loader2, LogIn } from 'lucide-react';
+import { FolderOpen, Plus, Clock, Box, Loader2, LogIn, Sparkles } from 'lucide-react';
 import { useProjectStore } from '../store/projectStore';
 import { useAuthStore } from '../store/authStore';
 import { useEditorStore } from '../store/editorStore';
@@ -11,7 +11,7 @@ interface ProjectsPageProps {
 
 export default function Projects({ onNavigate }: ProjectsPageProps) {
   const { projects, listProjects, loadProject, createProject } = useProjectStore();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
@@ -70,8 +70,37 @@ export default function Projects({ onNavigate }: ProjectsPageProps) {
     <div className="w-full relative bg-white text-neutral-900 min-h-screen">
       <div className="absolute top-0 right-0 w-[600px] h-[500px] bg-indigo-500/5 blur-[120px] rounded-full pointer-events-none" />
 
-      <section className="relative pt-12 pb-24 px-6 max-w-7xl mx-auto">
+      <section className="relative pt-8 pb-24 px-6 max-w-7xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          
+          {/* Profile Quick View (Claude/ChatGPT Style) */}
+          <div className="mb-12 p-6 bg-neutral-50 border border-neutral-100 rounded-[24px] flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-600/20">
+                {user?.name?.[0].toUpperCase() || 'U'}
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-neutral-900">{user?.name}</h2>
+                <p className="text-sm text-neutral-500">{user?.email}</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-8">
+              <div className="text-left md:text-right">
+                <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-1">Available Credits</p>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-500 fill-current" />
+                  <span className="text-2xl font-black text-neutral-900">1,250</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => onNavigate('pricing')}
+                className="px-4 py-2 bg-white border border-neutral-200 rounded-xl text-sm font-bold hover:bg-neutral-50 transition-all shadow-sm"
+              >
+                Top up
+              </button>
+            </div>
+          </div>
 
           {/* Header */}
           <div className="flex items-end justify-between mb-12">

@@ -102,7 +102,7 @@ function ExportHandler() {
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = 'virelo-scene.gltf';
+            link.download = 'ixnel-scene.gltf';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);

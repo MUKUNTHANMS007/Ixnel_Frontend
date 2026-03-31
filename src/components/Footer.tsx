@@ -9,13 +9,13 @@ export default function Footer() {
             <div className="w-6 h-6 rounded-md bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center">
                <div className="w-3 h-3 bg-white rounded-sm" />
             </div>
-            <span className="font-bold text-lg tracking-tight text-neutral-900">Virelo</span>
+            <span className="font-bold text-lg tracking-tight text-neutral-900">Ixnel</span>
           </div>
           <p className="text-neutral-500 text-sm leading-relaxed max-w-sm mb-6">
             We're building the temporal web. Founded in 2023 by a team of computer vision researchers from MIT and Stanford. We believe the future of video isn't captured — it's generated.
           </p>
           <p className="text-neutral-400 text-xs">
-            © {new Date().getFullYear()} Virelo Inc. All rights reserved.
+            © {new Date().getFullYear()} Ixnel Inc. All rights reserved.
           </p>
         </div>
 

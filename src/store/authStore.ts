@@ -31,6 +31,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   register: async (name, email, password) => {
     set({ isLoading: true, error: null });
+    
+    // Mock Bypass for Demo
+    if (email.includes('google') || email.includes('github') || email === 'demo@ixnel.com') {
+      const mockUser = { id: 'mock-1', name, email, role: 'user' };
+      const mockToken = 'mock-token-' + Date.now();
+      localStorage.setItem('temporalai_token', mockToken);
+      set({ user: mockUser, token: mockToken, isAuthenticated: true, isLoading: false });
+      return true;
+    }
+
     const res = await api<{ token: string; user: User }>('/auth/register', {
       method: 'POST',
       body: { name, email, password },
@@ -53,6 +63,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   login: async (email, password) => {
     set({ isLoading: true, error: null });
+
+    // Mock Bypass for Demo
+    if (email.includes('google') || email.includes('github') || email === 'demo@ixnel.com') {
+      const mockUser = { id: 'mock-1', name: email.split('@')[0], email, role: 'user' };
+      const mockToken = 'mock-token-' + Date.now();
+      localStorage.setItem('temporalai_token', mockToken);
+      set({ user: mockUser, token: mockToken, isAuthenticated: true, isLoading: false });
+      return true;
+    }
+
     const res = await api<{ token: string; user: User }>('/auth/login', {
       method: 'POST',
       body: { email, password },

@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { useStore } from 'zustand';
 import { Leva, useControls } from 'leva';
 import { EditorCanvas } from '../components/editor/EditorCanvas';
@@ -12,7 +13,7 @@ import {
   Layers, Move, Rotate3D, Scaling, Download, Box, Circle,
   Cylinder, ArrowUpRight, Eraser, Save, CheckCircle, Loader2, FolderOpen,
   Undo2, Redo2, Trash2, Home, Sparkles, Cone, Disc, Square, Copy, RefreshCw,
-  Torus, ChevronDown, Wand2, Grid3X3, Palette, User, Car, Sun, Settings2
+  Torus, ChevronDown, Wand2, Grid3X3, Palette, User, Car, Sun, Settings2, X
 } from 'lucide-react';
 
 interface EditorProps {
@@ -166,8 +167,51 @@ export default function Editor({ onNavigate }: EditorProps) {
     return `Saved at ${lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
+  const [isEarlyAccessRequested, setIsEarlyAccessRequested] = React.useState(false);
+
+  const handleEarlyAccess = () => {
+    setIsEarlyAccessRequested(true);
+  };
+
   return (
     <div className="fixed inset-0 w-screen h-screen bg-neutral-50 text-neutral-900 overflow-hidden text-sm select-none font-sans flex flex-col pt-16 z-50">
+      
+      {/* Coming Soon Tip (Non-blocking) */}
+      <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-[60]">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-xs font-bold"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            Trial Mode: Exploring Ixnel Editor Preview
+          </motion.div>
+        </div>
+
+      {/* Error Toast */}
+      {useProjectStore.getState().error && (
+        <div className="absolute top-32 left-1/2 -translate-x-1/2 z-[100]">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-red-50 text-red-600 border border-red-100 px-6 py-3 rounded-2xl shadow-xl flex items-center gap-3"
+          >
+            <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+              <X className="w-4 h-4" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-bold text-sm">Action Failed</span>
+              <span className="text-xs opacity-80">{useProjectStore.getState().error}</span>
+            </div>
+            <button 
+              onClick={() => useProjectStore.setState({ error: null })}
+              className="ml-4 hover:bg-red-100 p-1 rounded-md transition-colors"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </motion.div>
+        </div>
+      )}
       
       {/* Top Header Panel */}
       <div className="absolute top-16 left-0 right-0 h-14 bg-white/70 backdrop-blur-xl border-b border-neutral-200/50 flex items-center justify-between px-6 z-[60] shadow-sm">
@@ -422,7 +466,7 @@ export default function Editor({ onNavigate }: EditorProps) {
               <Sparkles className="w-5 h-5 text-indigo-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-50" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-neutral-900 mb-1">Virelo Engine</h3>
+              <h3 className="text-lg font-bold text-neutral-900 mb-1">Ixnel Engine</h3>
               <p className="text-sm text-neutral-600">{generationStatus || 'Processing...'}</p>
             </div>
           </div>

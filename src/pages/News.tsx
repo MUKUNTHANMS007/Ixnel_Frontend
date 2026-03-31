@@ -41,7 +41,7 @@ const fallbackArticles: NewsArticle[] = [
   {
     _id: '3',
     title: "Creator Spotlight: Digital Dreams",
-    excerpt: "A deep dive into how top studios are using Virelo to revolutionize their post-production workflow.",
+    excerpt: "A deep dive into how top studios are using Ixnel to revolutionize their post-production workflow.",
     date: "2026-10-08",
     category: "Community",
     author: "Content Team",
@@ -50,7 +50,7 @@ const fallbackArticles: NewsArticle[] = [
   },
   {
     _id: '4',
-    title: "Virelo Raises $40M Series B",
+    title: "Ixnel Raises $40M Series B",
     excerpt: "We're expanding our team and infrastructure to accelerate the development of next-gen creative tools.",
     date: "2026-10-05",
     category: "Announcements",
@@ -72,19 +72,27 @@ export default function News() {
   useEffect(() => {
     const fetchArticles = async () => {
       setIsLoading(true);
-      const params = activeCategory !== 'All' ? `?category=${activeCategory}` : '';
-      const res = await api<NewsArticle[]>(`/news${params}`);
-      if (res.success && res.data && res.data.length > 0) {
-        setArticles(res.data);
-      } else {
-        // Use fallback data, filtered by category
-        if (activeCategory === 'All') {
-          setArticles(fallbackArticles);
+      try {
+        const params = activeCategory !== 'All' ? `?category=${activeCategory}` : '';
+        const res = await api<NewsArticle[]>(`/news${params}`);
+        if (res.success && res.data && res.data.length > 0) {
+          setArticles(res.data);
         } else {
-          setArticles(fallbackArticles.filter(a => a.category === activeCategory));
+          // Use fallback data, filtered by category
+          const filtered = activeCategory === 'All' 
+            ? fallbackArticles 
+            : fallbackArticles.filter(a => a.category === activeCategory);
+          setArticles(filtered);
         }
+      } catch (err) {
+        console.error("Failed to fetch news, using fallbacks:", err);
+        const filtered = activeCategory === 'All' 
+          ? fallbackArticles 
+          : fallbackArticles.filter(a => a.category === activeCategory);
+        setArticles(filtered);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
     fetchArticles();
   }, [activeCategory]);
@@ -134,7 +142,7 @@ export default function News() {
                 Updates & <span className="gradient-text">Insights</span>
               </h1>
               <p className="text-lg text-neutral-600">
-                The latest news, engineering breakthroughs, and community highlights from the Virelo team.
+                The latest news, engineering breakthroughs, and community highlights from the Ixnel team.
               </p>
             </div>
             
