@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, ArrowRight, Calendar, User, ArrowUpRight, Loader2 } from 'lucide-react';
+import { Search, ArrowRight, Calendar, User, ArrowUpRight, Loader2, Edit2, Trash2, PlusCircle } from 'lucide-react';
 import { api } from '../lib/api';
+import { useAuthStore } from '../store/authStore';
 
 interface NewsArticle {
   _id: string;
@@ -61,6 +62,8 @@ const fallbackArticles: NewsArticle[] = [
 ];
 
 export default function News() {
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
   const categories = ["All", "Product", "Engineering", "Community", "Announcements"];
   const [activeCategory, setActiveCategory] = useState("All");
   const [articles, setArticles] = useState<NewsArticle[]>(fallbackArticles);
@@ -141,9 +144,19 @@ export default function News() {
               <h1 className="text-5xl md:text-6xl font-bold tracking-tight mb-6">
                 Updates & <span className="gradient-text">Insights</span>
               </h1>
-              <p className="text-lg text-neutral-600">
-                The latest news, engineering breakthroughs, and community highlights from the Ixnel team.
-              </p>
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <p className="text-lg text-neutral-600">
+                  The latest news, engineering breakthroughs, and community highlights from the Ixnel team.
+                </p>
+                {isAdmin && (
+                  <button 
+                    onClick={() => window.location.href = '/admin'}
+                    className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-neutral-900 text-white rounded-full text-sm font-bold shadow-lg shadow-neutral-200/50 hover:bg-indigo-600 transition-colors"
+                  >
+                    <PlusCircle className="w-4 h-4" /> Publish New
+                  </button>
+                )}
+              </div>
             </div>
             
             <div className="flex items-center gap-4 bg-neutral-50 p-1 rounded-full border border-neutral-200">
@@ -190,7 +203,18 @@ export default function News() {
                   whileHover={{ y: -5 }}
                   className="glass-card mb-16 overflow-hidden bg-white group cursor-pointer"
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 h-full">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 h-full relative">
+                    {/* Admin Tools Menu */}
+                    {isAdmin && (
+                      <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
+                         <button onClick={(e) => { e.stopPropagation(); alert('Edit mode activated.'); }} className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow border border-neutral-100 text-indigo-600 hover:bg-indigo-600 hover:text-white transition">
+                           <Edit2 className="w-4 h-4" />
+                         </button>
+                         <button onClick={(e) => { e.stopPropagation(); alert('Delete confirmed.'); }} className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow border border-neutral-100 text-red-500 hover:bg-red-500 hover:text-white transition">
+                           <Trash2 className="w-4 h-4" />
+                         </button>
+                      </div>
+                    )}
                     <div className="lg:col-span-3 h-64 md:h-auto overflow-hidden">
                       <img 
                         src={featured.image} 
@@ -241,8 +265,19 @@ export default function News() {
                     viewport={{ once: true }}
                     transition={{ duration: 0.5, delay: index * 0.1 }}
                     whileHover={{ y: -8 }}
-                    className="glass-card flex flex-col h-full bg-white group cursor-pointer overflow-hidden"
+                    className="glass-card flex flex-col h-full bg-white group cursor-pointer overflow-hidden relative"
                   >
+                    {/* Admin Tools Menu */}
+                    {isAdmin && (
+                      <div className="absolute top-4 right-4 z-20 flex gap-2">
+                         <button onClick={(e) => { e.stopPropagation(); alert('Edit mode activated.'); }} className="p-2 bg-white/90 backdrop-blur-md rounded-full shadow-sm text-indigo-600 hover:scale-110 transition">
+                           <Edit2 className="w-4 h-4" />
+                         </button>
+                         <button onClick={(e) => { e.stopPropagation(); alert('Delete confirmed.'); }} className="p-2 bg-white/90 backdrop-blur-md rounded-full shadow-sm text-red-500 hover:scale-110 transition">
+                           <Trash2 className="w-4 h-4" />
+                         </button>
+                      </div>
+                    )}
                     <div className="h-48 overflow-hidden relative">
                       <img 
                         src={item.image} 

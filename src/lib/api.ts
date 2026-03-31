@@ -47,11 +47,17 @@ export async function api<T = unknown>(
 
     clearTimeout(timeoutId);
     
+    // Parse the JSON response regardless of status code
+    const data: ApiResponse<T> = await res.json().catch(() => ({ success: false, error: `API error: ${res.status}` }));
+
     if (!res.ok) {
-      throw new Error(`API error: ${res.status}`);
+      // Return the actual error message from the backend if it exists
+      return {
+        success: false,
+        error: data.error || `Server responded with status ${res.status}`,
+      };
     }
 
-    const data: ApiResponse<T> = await res.json();
     return data;
   } catch (err: any) {
     clearTimeout(timeoutId);

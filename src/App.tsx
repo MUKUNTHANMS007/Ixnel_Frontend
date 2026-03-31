@@ -12,8 +12,9 @@ import PricingPage from './pages/PricingPage';
 import PipelinePage from './pages/PipelinePage';
 import FeedbackPage from './pages/FeedbackPage';
 import Editor from './pages/Editor';
+import Admin from './pages/Admin';
 import { useAuthStore } from './store/authStore';
-import { Home as HomeIcon, FileText, Newspaper, LogIn, LogOut, FolderOpen, Sparkles, Video, MessageSquare, Box } from 'lucide-react';
+import { Home as HomeIcon, FileText, Newspaper, LogIn, LogOut, FolderOpen, Sparkles, Video, MessageSquare, Box, Settings } from 'lucide-react';
 
 export default function App() {
   const [activePage, setActivePage] = useState('home');
@@ -46,6 +47,9 @@ export default function App() {
     { name: 'Editor', id: 'editor', icon: Box },
     { name: 'News', id: 'news', icon: Newspaper },
     { name: 'Feedback', id: 'feedback', icon: MessageSquare },
+    ...(isAuthenticated && user?.role === 'admin'
+      ? [{ name: 'Admin', id: 'admin', icon: Settings }]
+      : []),
     ...(isAuthenticated
       ? [{ name: 'Logout', id: 'logout', icon: LogOut }]
       : [{ name: 'Login', id: 'signin', icon: LogIn }]),
@@ -64,6 +68,7 @@ export default function App() {
       case 'signin': return <SignIn onNavigate={setActivePage} />;
       case 'signup': return <SignUp onNavigate={setActivePage} />;
       case 'result': return <ResultPage onNavigate={setActivePage} />;
+      case 'admin': return <Admin onNavigate={setActivePage} />;
       default: return <Home />;
     }
   };
