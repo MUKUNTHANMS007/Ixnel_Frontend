@@ -1,15 +1,43 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { MessageSquare, Send, Star, ThumbsUp, Heart, AlertCircle } from 'lucide-react';
+import { MessageSquare, Send, Star, ThumbsUp, Heart, AlertCircle, Loader2 } from 'lucide-react';
+import { api } from '../lib/api';
 
 export default function Feedback() {
   const [rating, setRating] = useState<number | null>(null);
   const [hoveredRating, setHoveredRating] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [type, setType] = useState('Feature');
+  const [message, setMessage] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    setIsSubmitting(true);
+    setErrorMsg('');
+
+    const res = await api('/feedback', {
+      method: 'POST',
+      body: { rating, name, email, type, message },
+    });
+
+    setIsSubmitting(false);
+
+    if (res.success) {
+      setSubmitted(true);
+      // Reset form
+      setRating(null);
+      setName('');
+      setEmail('');
+      setType('Feature');
+      setMessage('');
+    } else {
+      setErrorMsg(res.error || 'Failed to submit feedback. Please try again.');
+    }
   };
 
   if (submitted) {
@@ -58,6 +86,13 @@ export default function Feedback() {
           {/* Form Side */}
           <div className="lg:col-span-2">
             <form onSubmit={handleSubmit} className="space-y-8 bg-white p-10 rounded-[40px] border border-neutral-100 shadow-xl shadow-neutral-200/40">
+              
+              {errorMsg && (
+                <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-sm font-medium border border-red-100">
+                  {errorMsg}
+                </div>
+              )}
+
               <div className="space-y-4 text-center pb-8 border-b border-neutral-50">
                 <p className="text-sm font-bold text-neutral-400 uppercase tracking-widest">How would you rate your experience?</p>
                 <div className="flex justify-center gap-4">
@@ -86,6 +121,8 @@ export default function Feedback() {
                   <input 
                     type="text" 
                     required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
                     placeholder="John Doe" 
                     className="w-full px-6 py-4 bg-neutral-50 border border-neutral-100 rounded-2xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none font-medium" 
                   />
@@ -95,6 +132,8 @@ export default function Feedback() {
                   <input 
                     type="email" 
                     required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     placeholder="john@example.com" 
                     className="w-full px-6 py-4 bg-neutral-50 border border-neutral-100 rounded-2xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none font-medium" 
                   />
@@ -104,13 +143,18 @@ export default function Feedback() {
               <div className="space-y-2">
                 <label className="text-sm font-bold text-neutral-600 ml-1">Feedback Type</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {['Feature', 'Bug', 'Design', 'Other'].map((type) => (
+                  {['Feature', 'Bug', 'Design', 'Other'].map((t) => (
                     <button
-                      key={type}
+                      key={t}
                       type="button"
-                      className="py-3 px-4 rounded-xl border border-neutral-100 bg-neutral-50 text-neutral-500 text-sm font-bold hover:bg-white hover:border-indigo-200 hover:text-indigo-600 transition-all"
+                      onClick={() => setType(t)}
+                      className={`py-3 px-4 rounded-xl border text-sm font-bold transition-all ${
+                        type === t 
+                          ? 'bg-indigo-50 border-indigo-200 text-indigo-600'
+                          : 'bg-neutral-50 border-neutral-100 text-neutral-500 hover:bg-white hover:border-indigo-200 hover:text-indigo-600'
+                      }`}
                     >
-                      {type}
+                      {t}
                     </button>
                   ))}
                 </div>
@@ -121,6 +165,8 @@ export default function Feedback() {
                 <textarea 
                   required
                   rows={4} 
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
                   placeholder="Tell us what's on your mind..." 
                   className="w-full px-6 py-4 bg-neutral-50 border border-neutral-100 rounded-2xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none font-medium resize-none" 
                 />
@@ -128,10 +174,20 @@ export default function Feedback() {
 
               <button 
                 type="submit"
-                className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 hover:-translate-y-1 active:scale-95 transition-all flex items-center justify-center gap-3"
+                disabled={isSubmitting}
+                className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 hover:-translate-y-1 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-70 disabled:hover:translate-y-0"
               >
-                Send Feedback
-                <Send className="w-5 h-5" />
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    Send Feedback
+                    <Send className="w-5 h-5" />
+                  </>
+                )}
               </button>
             </form>
           </div>
