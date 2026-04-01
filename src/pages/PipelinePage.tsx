@@ -12,40 +12,42 @@ export default function PipelinePage() {
   const { createProject, setActiveResult } = useProjectStore();
   const { isAuthenticated } = useAuthStore();
   
-  const [startFrame, setStartFrame] = useState<File | null>(null);
-  const [endFrame, setEndFrame] = useState<File | null>(null);
+  const [referenceImage, setReferenceImage] = useState<File | null>(null);
+  const [lineartFrames, setLineartFrames] = useState<File[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   
   // Optional settings
   const [fps, setFps] = useState<number>(24);
-  const [nFrames, setNFrames] = useState<number>(200);
+  const [nFrames, setNFrames] = useState<number>(0);
 
-  const startInputRef = useRef<HTMLInputElement>(null);
-  const endInputRef = useRef<HTMLInputElement>(null);
+  const refInputRef = useRef<HTMLInputElement>(null);
+  const lineartInputRef = useRef<HTMLInputElement>(null);
 
-  const handleStartUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRefUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setStartFrame(e.target.files[0]);
+      setReferenceImage(e.target.files[0]);
     }
   };
 
-  const handleEndUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setEndFrame(e.target.files[0]);
+  const handleLineartUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setLineartFrames(files);
+      setNFrames(files.length);
     }
   };
 
   const handleGenerate = () => {
-    if (startFrame && endFrame) {
+    if (referenceImage && lineartFrames.length > 0) {
       setSaved(false);
-      startJob(startFrame, endFrame, { fps, n_frames: nFrames });
+      startJob(referenceImage, lineartFrames, { fps, n_frames: nFrames });
     }
   };
 
   const handleReset = () => {
-    setStartFrame(null);
-    setEndFrame(null);
+    setReferenceImage(null);
+    setLineartFrames([]);
     setSaved(false);
     reset();
   };
@@ -87,19 +89,19 @@ export default function PipelinePage() {
         {state === 'idle' || state === 'uploading' ? (
           <div className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-8 space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Start Frame Uploader */}
+              {/* Reference Image Uploader */}
               <div className="space-y-4">
-                <label className="block text-sm font-medium text-neutral-700">Start Frame</label>
+                <label className="block text-sm font-medium text-neutral-700">Reference Image</label>
                 <div 
-                  onClick={() => startInputRef.current?.click()}
-                  className={`relative cursor-pointer group flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl transition-colors ${startFrame ? 'border-indigo-500 bg-indigo-50' : 'border-neutral-300 hover:border-indigo-400 hover:bg-neutral-50 h-64'}`}
+                   onClick={() => refInputRef.current?.click()}
+                   className={`relative cursor-pointer group flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl transition-colors ${referenceImage ? 'border-indigo-500 bg-indigo-50' : 'border-neutral-300 hover:border-indigo-400 hover:bg-neutral-50 h-64'}`}
                 >
-                  <input type="file" ref={startInputRef} onChange={handleStartUpload} accept="image/*" className="hidden" />
-                  {startFrame ? (
+                  <input type="file" ref={refInputRef} onChange={handleRefUpload} accept="image/*" className="hidden" />
+                  {referenceImage ? (
                     <div className="relative w-full h-full flex flex-col items-center">
-                      <img src={URL.createObjectURL(startFrame)} alt="Start Frame" className="max-h-48 object-contain rounded-lg shadow-sm" />
+                      <img src={URL.createObjectURL(referenceImage)} alt="Reference" className="max-h-48 object-contain rounded-lg shadow-sm" />
                       <button 
-                        onClick={(e) => { e.stopPropagation(); setStartFrame(null); }}
+                        onClick={(e) => { e.stopPropagation(); setReferenceImage(null); }}
                         className="absolute -top-3 -right-3 p-1 bg-white shadow-md rounded-full text-neutral-500 hover:text-red-500"
                       >
                         <X className="w-5 h-5" />
@@ -108,25 +110,29 @@ export default function PipelinePage() {
                   ) : (
                     <div className="flex flex-col items-center text-neutral-500 group-hover:text-indigo-500">
                       <ImageIcon className="w-12 h-12 mb-3 opacity-50" />
-                      <span className="font-medium">Click to upload first image</span>
+                      <span className="font-medium text-center">Click to upload reference style image</span>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* End Frame Uploader */}
+              {/* Lineart Sequence Uploader */}
               <div className="space-y-4">
-                <label className="block text-sm font-medium text-neutral-700">End Frame</label>
+                <label className="block text-sm font-medium text-neutral-700">Lineart Sequence</label>
                 <div 
-                  onClick={() => endInputRef.current?.click()}
-                  className={`relative cursor-pointer group flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl transition-colors ${endFrame ? 'border-indigo-500 bg-indigo-50' : 'border-neutral-300 hover:border-indigo-400 hover:bg-neutral-50 h-64'}`}
+                  onClick={() => lineartInputRef.current?.click()}
+                  className={`relative cursor-pointer group flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl transition-colors ${lineartFrames.length > 0 ? 'border-indigo-500 bg-indigo-50' : 'border-neutral-300 hover:border-indigo-400 hover:bg-neutral-50 h-64'}`}
                 >
-                  <input type="file" ref={endInputRef} onChange={handleEndUpload} accept="image/*" className="hidden" />
-                  {endFrame ? (
-                    <div className="relative w-full h-full flex flex-col items-center">
-                      <img src={URL.createObjectURL(endFrame)} alt="End Frame" className="max-h-48 object-contain rounded-lg shadow-sm" />
+                  <input type="file" ref={lineartInputRef} onChange={handleLineartUpload} accept="image/*" multiple className="hidden" />
+                  {lineartFrames.length > 0 ? (
+                    <div className="relative w-full h-full flex flex-col items-center justify-center">
+                      <div className="text-center p-4">
+                        <ImageIcon className="w-12 h-12 mb-3 mx-auto text-indigo-500" />
+                        <span className="text-lg font-bold text-indigo-700">{lineartFrames.length} Frames Selected</span>
+                        <p className="text-sm text-indigo-600 opacity-75">Ready for colorization</p>
+                      </div>
                       <button 
-                        onClick={(e) => { e.stopPropagation(); setEndFrame(null); }}
+                        onClick={(e) => { e.stopPropagation(); setLineartFrames([]); }}
                         className="absolute -top-3 -right-3 p-1 bg-white shadow-md rounded-full text-neutral-500 hover:text-red-500"
                       >
                         <X className="w-5 h-5" />
@@ -134,8 +140,8 @@ export default function PipelinePage() {
                     </div>
                   ) : (
                     <div className="flex flex-col items-center text-neutral-500 group-hover:text-indigo-500">
-                      <ImageIcon className="w-12 h-12 mb-3 opacity-50" />
-                      <span className="font-medium">Click to upload target image</span>
+                      <Upload className="w-12 h-12 mb-3 opacity-50" />
+                      <span className="font-medium text-center">Click to upload lineart sequence (multiple files)</span>
                     </div>
                   )}
                 </div>
@@ -157,10 +163,10 @@ export default function PipelinePage() {
 
               <button
                 onClick={handleGenerate}
-                disabled={!startFrame || !endFrame || state === 'uploading'}
+                disabled={!referenceImage || lineartFrames.length === 0 || state === 'uploading'}
                 className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-xl font-semibold shadow-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
               >
-                {state === 'uploading' ? 'Uploading...' : 'Generate Video'}
+                {state === 'uploading' ? 'Uploading...' : 'Generate Colorized Video'}
                 <Upload className="w-5 h-5" />
               </button>
             </div>

@@ -12,13 +12,17 @@ export interface JobStatus {
 
 export const pipelineApi = {
   createJob: async (
-    startFrame: File,
-    endFrame: File,
+    referenceImage: File,
+    lineartFrames: File[],
     options?: { n_frames?: number; width?: number; height?: number; fps?: number }
   ) => {
     const formData = new FormData();
-    formData.append('start_frame', startFrame);
-    formData.append('end_frame', endFrame);
+    formData.append('reference_image', referenceImage);
+    
+    // Append each frame to the same field name for multer.array/any
+    lineartFrames.forEach((frame) => {
+      formData.append('lineart_frames', frame);
+    });
     
     if (options?.n_frames) formData.append('n_frames', options.n_frames.toString());
     if (options?.width) formData.append('width', options.width.toString());
@@ -31,7 +35,8 @@ export const pipelineApi = {
     });
     
     if (!res.ok) {
-      throw new Error('Failed to create pipeline job');
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to create pipeline job');
     }
     return res.json(); // { job_id: string }
   },

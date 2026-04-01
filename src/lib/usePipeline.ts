@@ -11,11 +11,11 @@ export function usePipeline() {
   const [error, setError] = useState<string | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
 
-  const startJob = async (startFrame: File, endFrame: File, options?: any) => {
+  const startJob = async (referenceImage: File, lineartFrames: File[], options?: any) => {
     try {
       setState('uploading');
       setError(null);
-      const res = await pipelineApi.createJob(startFrame, endFrame, options);
+      const res = await pipelineApi.createJob(referenceImage, lineartFrames, options);
       if (res.job_id) {
         setJobId(res.job_id);
         setState('queued');
