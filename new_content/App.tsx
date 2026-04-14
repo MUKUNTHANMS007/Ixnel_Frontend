@@ -56,7 +56,7 @@ export default function App() {
     { name: 'Pricing', id: 'pricing', icon: Sparkles },
     { name: 'Docs', id: 'docs', icon: FileText },
     { name: 'Projects', id: 'projects', icon: FolderOpen },
-    // { name: 'Editor', id: 'editor', icon: Box },
+    { name: 'Editor', id: 'editor', icon: Box },
     { name: 'News', id: 'news', icon: Newspaper },
     { name: 'Feedback', id: 'feedback', icon: MessageSquare },
     ...(isAuthenticated && user?.role === 'admin'

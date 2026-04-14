@@ -60,10 +60,10 @@ export function NavBar({ items, onNavigate, activePage, className }: NavBarProps
                     damping: 30,
                   }}
                 >
-                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-1 bg-indigo-500 rounded-t-full">
-                    <div className="absolute w-12 h-6 bg-indigo-500/40 rounded-full blur-md -top-2 -left-2" />
-                    <div className="absolute w-8 h-6 bg-indigo-500/20 rounded-full blur-md -top-1" />
-                    <div className="absolute w-4 h-4 bg-indigo-500/20 rounded-full blur-sm top-0 left-2" />
+                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-1 bg-[#00AAFF] rounded-t-full">
+                    <div className="absolute w-12 h-6 bg-[#00AAFF]/40 rounded-full blur-md -top-2 -left-2" />
+                    <div className="absolute w-8 h-6 bg-[#00AAFF]/20 rounded-full blur-md -top-1" />
+                    <div className="absolute w-4 h-4 bg-[#00AAFF]/20 rounded-full blur-sm top-0 left-2" />
                   </div>
                 </motion.div>
               )}
