@@ -3,11 +3,13 @@ import { usePipeline } from '../lib/usePipeline';
 import { pipelineApi } from '../lib/pipelineApi';
 import { JobProgress } from '../components/JobProgress';
 import { VideoPlayer } from '../components/VideoPlayer';
-import { Upload, X, Image as ImageIcon, Settings, Save, Loader2, Check } from 'lucide-react';
+import { 
+  Upload, X, Image as ImageIcon, Settings, Save, Loader2, Check, ArrowLeft 
+} from 'lucide-react';
 import { useProjectStore } from '../store/projectStore';
 import { useAuthStore } from '../store/authStore';
 
-export default function PipelinePage() {
+export default function PipelinePage({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { state, jobId, status, error, startJob, reset } = usePipeline();
   const { createProject, setActiveResult } = useProjectStore();
   const { isAuthenticated } = useAuthStore();
@@ -54,13 +56,8 @@ export default function PipelinePage() {
 
   const handleSaveToProjects = async () => {
     if (!jobId || !isAuthenticated) return;
-    
     setIsSaving(true);
-    const projectName = `Pipeline Result ${new Date().toLocaleDateString()}`;
-    
-    // We create a ghost project with the result data
-    // The projectStore needs to be able to handle this
-    // For now, we'll try to create it normally and then set the active result
+    const projectName = `Colorization Result ${new Date().toLocaleDateString()}`;
     const success = await createProject(projectName);
     
     if (success) {
@@ -69,7 +66,7 @@ export default function PipelinePage() {
         videoUrl: pipelineApi.getVideoUrl(jobId),
         psdUrl: pipelineApi.getZipUrl(jobId),
         title: projectName,
-        type: 'transition',
+        type: 'generation',
         status: 'completed'
       });
       setSaved(true);
@@ -81,9 +78,19 @@ export default function PipelinePage() {
     <div className="min-h-screen bg-neutral-950 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto space-y-8">
         
-        <div className="text-center space-y-2">
-          <h1 className="text-4xl font-black tracking-tight text-white">Ixnel V3 Pipeline</h1>
-          <p className="text-lg text-[#00AAFF]">Dual-Seed Adaptive Generation Flow</p>
+        {/* Back Navigation & Header */}
+        <div>
+          <button 
+            onClick={() => onNavigate?.('products')}
+            className="flex items-center gap-2 text-xs font-bold text-neutral-500 uppercase tracking-widest hover:text-[#00AAFF] transition-colors mb-6 group"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> 
+            Back to Products
+          </button>
+          <div className="text-center space-y-2">
+            <h1 className="text-4xl font-black tracking-tight text-white">Semantic Colorization</h1>
+            <p className="text-lg text-[#00AAFF]">Upload Line-art & Reference Sheet</p>
+          </div>
         </div>
 
         {state === 'idle' || state === 'uploading' ? (
@@ -177,8 +184,6 @@ export default function PipelinePage() {
           </div>
         ) : (
           <div className="space-y-8 animate-in fade-in duration-500">
-            {/* Note: Ensure JobProgress and VideoPlayer components internally support dark mode styling 
-                or pass styling props if applicable. */}
             <JobProgress 
               state={state} 
               currentStep={status?.current_step} 
