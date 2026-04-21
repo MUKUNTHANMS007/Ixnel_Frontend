@@ -21,8 +21,8 @@ export default function Footer() {
           <h4 className="font-semibold text-white mb-6 uppercase tracking-wider text-xs">Product</h4>
           <ul className="flex flex-col gap-4">
             <li><a href="#" className="flex items-center gap-1 text-sm text-neutral-400 hover:text-[#00AAFF] transition-colors">Workspace</a></li>
-            <li><a href="#" className="text-sm text-neutral-400 hover:text-[#00AAFF] transition-colors">Motion Extend</a></li>
-            <li><a href="#" className="text-sm text-neutral-400 hover:text-[#00AAFF] transition-colors">Scene Morph</a></li>
+            <li><a href="#" className="text-sm text-neutral-400 hover:text-[#00AAFF] transition-colors">Plugins</a></li>
+            <li><a href="#" className="text-sm text-neutral-400 hover:text-[#00AAFF] transition-colors">Beta</a></li>
             <li><a href="#" className="text-sm text-neutral-400 hover:text-[#00AAFF] transition-colors">API</a></li>
           </ul>
         </div>
