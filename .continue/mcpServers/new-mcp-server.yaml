@@ -1,0 +1,10 @@
+name: GitNexus Graph Server
+version: 1.0.0
+schema: v1
+mcpServers:
+  - name: gitnexus
+    command: gitnexus
+    args:
+      - mcp
+    env:
+      GITNEXUS_LBUG_EXTENSION_INSTALL: "never"
