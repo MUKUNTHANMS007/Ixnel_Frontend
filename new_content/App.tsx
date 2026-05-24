@@ -9,7 +9,7 @@ import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
 import ResultPage from './pages/ResultPage';
 import PricingPage from './pages/PricingPage';
-import ProductsPage from './pages/Products';
+import PipelinePage from './pages/PipelinePage';
 import FeedbackPage from './pages/FeedbackPage';
 import Editor from './pages/Editor';
 import Admin from './pages/Admin';
@@ -24,6 +24,7 @@ import {
   Sparkles,
   Video,
   MessageSquare,
+  Box,
   Settings,
 } from 'lucide-react';
 
@@ -49,21 +50,21 @@ export default function App() {
     setActivePage(page);
   };
 
-  // Optimized Navigation Items
-  const navItems =[
+  const navItems = [
     { name: 'Home', id: 'home', icon: HomeIcon },
-    { name: 'Products', id: 'products', icon: Video }, // Renamed from AI Suite
+    { name: 'Pipeline', id: 'pipeline', icon: Video },
     { name: 'Pricing', id: 'pricing', icon: Sparkles },
     { name: 'Docs', id: 'docs', icon: FileText },
     { name: 'Projects', id: 'projects', icon: FolderOpen },
+    { name: 'Editor', id: 'editor', icon: Box },
     { name: 'News', id: 'news', icon: Newspaper },
     { name: 'Feedback', id: 'feedback', icon: MessageSquare },
     ...(isAuthenticated && user?.role === 'admin'
-      ?[{ name: 'Admin', id: 'admin', icon: Settings }]
+      ? [{ name: 'Admin', id: 'admin', icon: Settings }]
       : []),
     ...(isAuthenticated
-      ?[{ name: 'Logout', id: 'logout', icon: LogOut }]
-      :[{ name: 'Login', id: 'signin', icon: LogIn }]),
+      ? [{ name: 'Logout', id: 'logout', icon: LogOut }]
+      : [{ name: 'Login', id: 'signin', icon: LogIn }]),
   ];
 
   const renderContent = () => {
@@ -71,7 +72,7 @@ export default function App() {
       case 'home':     return <Home onNavigate={setActivePage} />;
       case 'docs':     return <Docs />;
       case 'news':     return <News />;
-      case 'products': return <ProductsPage onNavigate={setActivePage} />; // Routes here now
+      case 'pipeline': return <PipelinePage />;
       case 'projects': return <Projects onNavigate={setActivePage} />;
       case 'pricing':  return <PricingPage />;
       case 'editor':   return <Editor onNavigate={setActivePage} />;
@@ -80,11 +81,21 @@ export default function App() {
       case 'signup':   return <SignUp onNavigate={setActivePage} />;
       case 'result':   return <ResultPage onNavigate={setActivePage} />;
       case 'admin':    return <Admin onNavigate={setActivePage} />;
-      default:         return <Home onNavigate={setActivePage} />;
+      default:         return <Home />;
     }
   };
 
   return (
+    /*
+     * Global design tokens:
+     *   Background  →  neutral-950  (#0a0a0a)
+     *   Primary     →  #00AAFF  (electric blue)
+     *   Text        →  white / neutral-400 for muted
+     *   Accent glow →  #00AAFF at 10-20% opacity
+     *
+     * Replace any leftover `indigo-*` or `bg-white` root-level classes
+     * in other pages with these tokens as you migrate each page.
+     */
     <div className="min-h-screen bg-neutral-950 text-white selection:bg-[#00AAFF]/30 selection:text-white">
       <NavBar items={navItems} onNavigate={handleNavigation} activePage={activePage} />
 
