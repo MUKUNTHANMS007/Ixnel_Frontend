@@ -10,7 +10,7 @@ export default function Footer() {
             <span className="font-bold text-lg tracking-tight text-white">Ixnel</span>
           </div>
           <p className="text-neutral-400 text-sm leading-relaxed max-w-sm mb-6">
-            We're building the temporal web. Founded in 2023 by a team of computer vision researchers from MIT and Stanford. We believe the future of video isn't captured — it's generated.
+            We're building the temporal web. Founded in 2026 by a team of AI enthusiasts.
           </p>
           <p className="text-neutral-500 text-xs">
             © {new Date().getFullYear()} Ixnel Inc. All rights reserved.
