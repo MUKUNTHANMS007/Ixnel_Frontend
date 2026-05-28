@@ -1,20 +1,26 @@
+// pages/Projects.tsx
+
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { FolderOpen, Plus, Clock, Box, Loader2, LogIn, Sparkles } from 'lucide-react';
 import { useProjectStore } from '../store/projectStore';
-import { useAuthStore } from '../store/authStore';
 import { useEditorStore } from '../store/editorStore';
+
+// Imported Types from api.ts
+import type { User, UserProfile } from '../lib/api';
 
 interface ProjectsPageProps {
   onNavigate: (page: string) => void;
+  isAuthenticated: boolean;
+  user: User | null;
+  profile: UserProfile | null;
 }
 
-export default function Projects({ onNavigate }: ProjectsPageProps) {
+export default function Projects({ onNavigate, isAuthenticated, user, profile }: ProjectsPageProps) {
   const { projects, listProjects, loadProject, createProject } = useProjectStore();
-  const { isAuthenticated, user, getAvailableCredits, profile} = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
-  const[newName, setNewName] = useState('');
+  const [newName, setNewName] = useState('');
   const [showNew, setShowNew] = useState(false);
 
   useEffect(() => {
@@ -46,6 +52,7 @@ export default function Projects({ onNavigate }: ProjectsPageProps) {
     setCreating(false);
   };
 
+  // ─ SCREEN 1: Guest/Unauthenticated State ─────────────────────────────────
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center gap-6 text-center px-4 relative">
@@ -68,8 +75,10 @@ export default function Projects({ onNavigate }: ProjectsPageProps) {
     );
   }
 
-  const availableCredits = getAvailableCredits();
+  // Calculate credits locally
+  const availableCredits = profile ? profile.credits - profile.reserved_credits : 0;
 
+  // ─ SCREEN 2: Authenticated Projects Workspace ─────────────────────────────
   return (
     <div className="w-full relative bg-neutral-950 text-white min-h-screen">
       <div className="absolute top-0 right-0 w-[600px] h-[500px] bg-[#00AAFF]/10 blur-[120px] rounded-full pointer-events-none" />
@@ -239,7 +248,6 @@ export default function Projects({ onNavigate }: ProjectsPageProps) {
               ))}
             </div>
           )}
-
         </motion.div>
       </section>
     </div>

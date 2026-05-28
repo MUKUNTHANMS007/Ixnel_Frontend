@@ -143,7 +143,7 @@ export default function App() {
       case 'docs':           return <Docs />;
       case 'news':           return <News />;
       case 'products':       return <ProductsPage onNavigate={setActivePage} />;
-      case 'projects':       return <Projects onNavigate={setActivePage} />;
+      case 'projects':       return <Projects onNavigate={setActivePage} isAuthenticated={isAuthenticated} user={user} profile={profile} />;
       case 'pricing':        return <PricingPage />;
       case 'editor':         return <Editor onNavigate={setActivePage} />;
       case 'feedback':       return <FeedbackPage />;
