@@ -1,5 +1,7 @@
-import { create }   from 'zustand';
-import { persist }  from 'zustand/middleware';
+// store/authStore.ts
+
+import { create }  from 'zustand';
+import { persist } from 'zustand/middleware';
 import {
   authAPI,
   type RegisterPayload,
@@ -8,331 +10,400 @@ import {
 } from '../lib/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// User shape - aligned with backend getMe / login / register response
-// backend returns: { user: { id, email, name(=username), auth_provider,
-//                            email_verified }, profile: { ... } }
+// TYPES
+// Shapes match backend response exactly
 // ─────────────────────────────────────────────────────────────────────────────
+
 export interface User {
   id             : string;
   email          : string;
-  name           : string;          // maps to username in DB
-  auth_provider  : string;
+  auth_provider  : 'local' | 'google' | 'github';
   email_verified : boolean;
+  created_at     : string;
+  updated_at     : string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Profile shape - full credit + business info
-// stored separately so components can access credit data
-// ─────────────────────────────────────────────────────────────────────────────
 export interface UserProfile {
   id                 : string;
+  auth_user_id       : string;
   username           : string;
   user_type          : 'individual' | 'company';
   company_name       : string | null;
   credits            : number;
   reserved_credits   : number;
-  available_credits  : number;
-  total_credits_used?: number;
+  available_credits  : number;    // computed by backend, sent directly
+  total_credits_used : number;
   is_blocked         : boolean;
+  created_at         : string;
+  updated_at         : string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Auth State
+// STATE INTERFACE
 // ─────────────────────────────────────────────────────────────────────────────
+
 interface AuthState {
-  user         : User | null;
-  profile      : UserProfile | null;      // ← added, was missing before
-  accessToken  : string | null;
-  refreshToken : string | null;
-  isLoading    : boolean;
-  error        : string | null;
+  user            : User | null;
+  profile         : UserProfile | null;
+  accessToken     : string | null;
+  refreshToken    : string | null;
+  isLoading       : boolean;
+  error           : string | null;
+  isAuthenticated : boolean;    // plain boolean — updated on every auth change
 
-  // Computed
-  isAuthenticated : boolean;
-
-  // Actions
-  register    : (
+  register           : (
     username      : string,
     email         : string,
     password      : string,
     user_type     : 'individual' | 'company',
-    company_name ?: string
+    company_name ?: string,
   ) => Promise<boolean>;
 
-  login       : (email: string, password: string) => Promise<boolean>;
-
-  oauthLogin  : (payload: OAuthCallbackPayload) => Promise<boolean>;
-
-  logout      : () => Promise<void>;
-
-  clearError  : () => void;
-
+  login              : (email: string, password: string) => Promise<boolean>;
+  oauthLogin         : (payload: OAuthCallbackPayload) => Promise<boolean>;
+  logout             : () => Promise<void>;
+  clearError         : () => void;
   refreshAccessToken : () => Promise<boolean>;
-
-  fetchMe     : () => Promise<void>;
-
-  // Credit helpers (reads from profile)
-  getAvailableCredits : () => number;
+  fetchMe            : () => Promise<void>;
+  getAvailableCredits: () => number;
+  canAffordJob       : (jobCost: number) => boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Store
+// INTERNAL HELPERS
+// Centralized set calls — isAuthenticated always stays in sync
 // ─────────────────────────────────────────────────────────────────────────────
+
+type SetFn = (
+  partial : Partial<AuthState>
+         | ((state: AuthState) => Partial<AuthState>)
+) => void;
+
+/**
+ * Sets authenticated state.
+ * Always syncs isAuthenticated, resets loading + error.
+ */
+const setAuth = (
+  set  : SetFn,
+  data : {
+    user         : User | null;
+    profile      : UserProfile | null;
+    accessToken  : string | null;
+    refreshToken : string | null;
+  },
+): void => {
+  set({
+    ...data,
+    isAuthenticated : !!data.user && !!data.accessToken,
+    isLoading       : false,
+    error           : null,
+  });
+};
+
+/**
+ * Clears all auth state.
+ * Used on logout, token expiry, account suspension.
+ */
+const clearAuth = (set: SetFn): void => {
+  set({
+    user            : null,
+    profile         : null,
+    accessToken     : null,
+    refreshToken    : null,
+    isAuthenticated : false,
+    isLoading       : false,
+    error           : null,
+  });
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STORE
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
 
-      // ── Initial state ────────────────────────────────────────────────────
-      user         : null,
-      profile      : null,
-      accessToken  : null,
-      refreshToken : null,
-      isLoading    : false,
-      error        : null,
+      // ── Initial state ─────────────────────────────────────────────────────
+      user            : null,
+      profile         : null,
+      accessToken     : null,
+      refreshToken    : null,
+      isLoading       : false,
+      error           : null,
+      isAuthenticated : false,
 
-      // ── Computed ─────────────────────────────────────────────────────────
-      get isAuthenticated() {
-        return !!get().user && !!get().accessToken;
-      },
+      // ── Credit helpers ────────────────────────────────────────────────────
 
-      // ── Credit helper ─────────────────────────────────────────────────────
       getAvailableCredits: () => {
         const { profile } = get();
         if (!profile) return 0;
-        return profile.credits - profile.reserved_credits;
+        // Use server-computed field — avoids recomputing from potentially stale values
+        return profile.available_credits;
       },
 
-      // ═══════════════════════════════════════════════════════════════════
+      canAffordJob: (jobCost: number) => {
+        return get().getAvailableCredits() >= jobCost;
+      },
+
+      // ═══════════════════════════════════════════════════════════════════════
       // REGISTER
-      // Sends: { email, password, username, user_type, company_name? }
-      // Receives: { success, accessToken, refreshToken, user, profile }
-      // ═══════════════════════════════════════════════════════════════════
+      // ═══════════════════════════════════════════════════════════════════════
       register: async (
-        username     : string,
-        email        : string,
-        password     : string,
-        user_type    : 'individual' | 'company',
-        company_name?: string
+        username,
+        email,
+        password,
+        user_type,
+        company_name,
       ) => {
         set({ isLoading: true, error: null });
 
-        // Build payload matching backend RegisterPayload exactly
-        const payload: RegisterPayload = {
-          email,
-          password,
-          username,
-          user_type,
-          ...(company_name ? { company_name } : {}),
-        };
+        console.log('[authStore][register] start', { email, user_type });
+
+        const payload: RegisterPayload = { email, password, username, user_type };
+        if (company_name?.trim()) {
+          payload.company_name = company_name.trim();
+        }
 
         const response = await authAPI.register(payload);
 
+        console.log('[authStore][register] response', {
+          success : response.success,
+          error   : response.error,
+          hasData : !!response.data,
+        });
+
         if (response.success && response.data) {
-          set({
+          setAuth(set, {
             user         : response.data.user,
-            profile      : response.data.profile ?? null,
+            profile      : response.data.profile,
             accessToken  : response.data.accessToken,
             refreshToken : response.data.refreshToken,
-            isLoading    : false,
-            error        : null,
           });
+          console.log('[authStore][register] success');
           return true;
         }
 
-        set({
-          isLoading : false,
-          error     : response.error || 'Registration failed',
-        });
+        console.warn('[authStore][register] failed', { error: response.error });
+        set({ isLoading: false, error: response.error || 'Registration failed' });
         return false;
       },
 
-      // ═══════════════════════════════════════════════════════════════════
+      // ═══════════════════════════════════════════════════════════════════════
       // LOGIN
-      // Sends: { email, password }
-      // Receives: { success, accessToken, refreshToken, user, profile }
-      // ═══════════════════════════════════════════════════════════════════
-      login: async (email: string, password: string) => {
+      // ═══════════════════════════════════════════════════════════════════════
+      login: async (email, password) => {
         set({ isLoading: true, error: null });
 
-        const payload: LoginPayload = { email, password };
-        const response = await authAPI.login(payload);
+        console.log('[authStore][login] start', { email });
+
+        const response = await authAPI.login({ email, password });
+
+        console.log('[authStore][login] FULL RESPONSE', response);
+        console.log('[authStore][login] response.data', response.data);
 
         if (response.success && response.data) {
-          set({
+          setAuth(set, {
             user         : response.data.user,
-            profile      : response.data.profile ?? null,
+            profile      : response.data.profile,
             accessToken  : response.data.accessToken,
             refreshToken : response.data.refreshToken,
-            isLoading    : false,
-            error        : null,
           });
+          console.log('[authStore][login] success');
           return true;
         }
 
-        set({
-          isLoading : false,
-          error     : response.error || 'Login failed',
-        });
+        console.warn('[authStore][login] failed', { error: response.error });
+        set({ isLoading: false, error: response.error || 'Login failed' });
         return false;
       },
 
-      // ═══════════════════════════════════════════════════════════════════
+      // ═══════════════════════════════════════════════════════════════════════
       // OAUTH LOGIN
-      // Sends: { provider, provider_user_id, email, user_type, company_name? }
-      // Receives: { success, accessToken, refreshToken, user, profile, isNewUser }
-      // ═══════════════════════════════════════════════════════════════════
-      oauthLogin: async (payload: OAuthCallbackPayload) => {
+      // ═══════════════════════════════════════════════════════════════════════
+      oauthLogin: async (payload) => {
         set({ isLoading: true, error: null });
+
+        console.log('[authStore][oauthLogin] start', {
+          provider : payload.provider,
+          email    : payload.email,
+        });
 
         const response = await authAPI.oauthCallback(payload);
 
+        console.log('[authStore][oauthLogin] response', {
+          success   : response.success,
+          error     : response.error,
+          hasData   : !!response.data,
+          isNewUser : response.data?.isNewUser,
+        });
+
         if (response.success && response.data) {
-          set({
+          setAuth(set, {
             user         : response.data.user,
-            profile      : response.data.profile ?? null,
+            profile      : response.data.profile,
             accessToken  : response.data.accessToken,
             refreshToken : response.data.refreshToken,
-            isLoading    : false,
-            error        : null,
+          });
+          console.log('[authStore][oauthLogin] success', {
+            isNewUser: response.data.isNewUser,
           });
           return true;
         }
 
-        set({
-          isLoading : false,
-          error     : response.error || 'OAuth login failed',
-        });
+        console.warn('[authStore][oauthLogin] failed', { error: response.error });
+        set({ isLoading: false, error: response.error || 'OAuth login failed' });
         return false;
       },
 
-      // ═══════════════════════════════════════════════════════════════════
+      // ═══════════════════════════════════════════════════════════════════════
       // LOGOUT
-      // Clears all auth state locally
-      // Calls backend (stateless - backend logs, frontend clears)
-      // ═══════════════════════════════════════════════════════════════════
+      // ═══════════════════════════════════════════════════════════════════════
       logout: async () => {
         const { accessToken } = get();
 
+        console.log('[authStore][logout] start');
+
         if (accessToken) {
-          // Fire and forget - don't block UI on this
-          authAPI.logout(accessToken).catch(() => {});
+          // Fire and forget — do not block local logout on server response
+          authAPI.logout(accessToken).catch((err) => {
+            console.warn('[authStore][logout] server call failed (ignored):', err);
+          });
         }
 
-        set({
-          user         : null,
-          profile      : null,
-          accessToken  : null,
-          refreshToken : null,
-          error        : null,
-        });
+        clearAuth(set);   // resets everything including isLoading + isAuthenticated
+        console.log('[authStore][logout] complete');
       },
 
-      // ═══════════════════════════════════════════════════════════════════
+      // ═══════════════════════════════════════════════════════════════════════
       // CLEAR ERROR
-      // ═══════════════════════════════════════════════════════════════════
-      clearError: () => set({ error: null }),
+      // ═══════════════════════════════════════════════════════════════════════
+      clearError: () => {
+        set({ error: null });
+      },
 
-      // ═══════════════════════════════════════════════════════════════════
+      // ═══════════════════════════════════════════════════════════════════════
       // REFRESH ACCESS TOKEN
-      // Sends: { refreshToken }
-      // Receives: { success, accessToken, refreshToken }
-      // Rotates both tokens
-      // ═══════════════════════════════════════════════════════════════════
+      // ═══════════════════════════════════════════════════════════════════════
       refreshAccessToken: async () => {
         const { refreshToken } = get();
 
-        if (!refreshToken) return false;
+        if (!refreshToken) {
+          console.warn('[authStore][refreshAccessToken] no refresh token in store');
+          return false;
+        }
+
+        console.log('[authStore][refreshAccessToken] attempting refresh');
 
         const response = await authAPI.refreshToken(refreshToken);
 
         if (response.success && response.data) {
+          if (!response.data.refreshToken) {
+            // Backend should always return both — log if contract violated
+            console.warn('[authStore][refreshAccessToken] backend did not return new refreshToken');
+          }
+
           set({
             accessToken  : response.data.accessToken,
-            // Backend rotates refresh token too - update if returned
-            refreshToken : response.data.refreshToken ?? get().refreshToken,
+            refreshToken : response.data.refreshToken,
+            isAuthenticated : true,
           });
+
+          console.log('[authStore][refreshAccessToken] success');
           return true;
         }
 
-        // Refresh failed → full logout
+        console.warn('[authStore][refreshAccessToken] failed — logging out');
         await get().logout();
         return false;
       },
 
-      // ═══════════════════════════════════════════════════════════════════
+      // ═══════════════════════════════════════════════════════════════════════
       // FETCH ME
-      // Used on app load to restore session from persisted token
-      // GET /api/auth/me
-      // Receives: { success, user, profile }
-      // ═══════════════════════════════════════════════════════════════════
+      // Tries /me with current token
+      // On failure, tries refresh then retries /me
+      // On any unrecoverable failure, clears auth
+      // ═══════════════════════════════════════════════════════════════════════
       fetchMe: async () => {
         const { accessToken } = get();
 
         if (!accessToken) {
-          set({ user: null, profile: null });
+          console.warn('[authStore][fetchMe] no access token — clearing auth');
+          clearAuth(set);
           return;
         }
 
-        const isUserWithProfile = (payload: unknown): payload is { user: User; profile: UserProfile | null } =>
-          typeof payload === 'object'
-          && payload !== null
-          && 'user' in payload
-          && 'profile' in payload;
+        console.log('[authStore][fetchMe] fetching with current token');
 
-        try {
-          const response = await authAPI.me(accessToken);
+        const response = await authAPI.me(accessToken);
 
-          if (response.success && response.data) {
-            const responsePayload = isUserWithProfile(response.data)
-              ? response.data
-              : { user: response.data as User, profile: null };
-
-            set({
-              user    : responsePayload.user    ?? null,
-              profile : responsePayload.profile ?? null,
-            });
-          } else {
-            // Token invalid or expired → try refresh first
-            const refreshed = await get().refreshAccessToken();
-
-            if (!refreshed) {
-              // Refresh also failed → clear everything
-              set({
-                user         : null,
-                profile      : null,
-                accessToken  : null,
-                refreshToken : null,
-              });
-            } else {
-              // Retry fetchMe with new token
-              const retryResponse = await authAPI.me(get().accessToken!);
-              if (retryResponse.success && retryResponse.data) {
-                const retryPayload = isUserWithProfile(retryResponse.data)
-                  ? retryResponse.data
-                  : { user: retryResponse.data as User, profile: null };
-
-                set({
-                  user    : retryPayload.user    ?? null,
-                  profile : retryPayload.profile ?? null,
-                });
-              }
-            }
-          }
-        } catch (error) {
-          console.error('fetchMe error:', error);
+        if (response.success && response.data) {
           set({
-            user         : null,
-            profile      : null,
-            accessToken  : null,
-            refreshToken : null,
+            user    : response.data.user    ?? null,
+            profile : response.data.profile ?? null,
           });
+          console.log('[authStore][fetchMe] success');
+          return;
+        }
+
+        // ── /me failed — try to refresh token ───────────────────────────────
+        console.warn('[authStore][fetchMe] /me failed — attempting token refresh', {
+          error: response.error,
+        });
+
+        const { refreshToken } = get();
+
+        if (!refreshToken) {
+          console.warn('[authStore][fetchMe] no refresh token available — clearing auth');
+          clearAuth(set);
+          return;
+        }
+
+        const refreshResponse = await authAPI.refreshToken(refreshToken);
+
+        if (!refreshResponse.success || !refreshResponse.data) {
+          console.warn('[authStore][fetchMe] token refresh failed — clearing auth');
+          clearAuth(set);
+          return;
+        }
+
+        // ── Capture new token directly — do not read from store ──────────────
+        // Store set() is async-batched — reading get().accessToken here
+        // might return the old value
+        const newAccessToken  = refreshResponse.data.accessToken;
+        const newRefreshToken = refreshResponse.data.refreshToken;
+
+        set({
+          accessToken     : newAccessToken,
+          refreshToken    : newRefreshToken,
+          isAuthenticated : true,
+        });
+
+        console.log('[authStore][fetchMe] token refreshed — retrying /me');
+
+        // ── Retry /me with captured token ─────────────────────────────────
+        const retryResponse = await authAPI.me(newAccessToken);
+
+        if (retryResponse.success && retryResponse.data) {
+          set({
+            user    : retryResponse.data.user    ?? null,
+            profile : retryResponse.data.profile ?? null,
+          });
+          console.log('[authStore][fetchMe] retry success');
+        } else {
+          console.warn('[authStore][fetchMe] retry /me failed after refresh — clearing auth');
+          clearAuth(set);
         }
       },
+
     }),
 
+    // ── Persistence config ───────────────────────────────────────────────────
+    // Only persist what is needed to restore session across page reloads
+    // isLoading, error, isAuthenticated are intentionally excluded —
+    // they are derived or transient
     {
       name      : 'auth-storage',
-      // Persist tokens + user + profile across sessions
       partialize: (state) => ({
         user         : state.user,
         profile      : state.profile,

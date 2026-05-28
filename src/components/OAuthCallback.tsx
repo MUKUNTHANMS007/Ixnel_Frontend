@@ -1,6 +1,6 @@
+// pages/OAuthCallback.tsx
+
 import { useEffect } from 'react';
-import { useAuthStore } from '../store/authStore';
-import { oauthHelpers } from '../lib/api';
 import { Loader2 } from 'lucide-react';
 
 interface OAuthCallbackProps {
@@ -8,42 +8,31 @@ interface OAuthCallbackProps {
 }
 
 export default function OAuthCallback({ onNavigate }: OAuthCallbackProps) {
-  const { oauthLogin } = useAuthStore();
-
   useEffect(() => {
-    const handleCallback = async () => {
-      const callbackData = oauthHelpers.parseOAuthCallback();
+    // 1. Extract 'code' from URL query params inside the popup
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
 
-      if (!callbackData) {
-        console.error('Invalid OAuth callback');
-        onNavigate('signin');
-        return;
-      }
-
-      const { provider, code } = callbackData;
-
-      // Send code to backend for processing
-      const success = await oauthLogin({
-        provider,
-        code,
-        email: '', // Backend will extract this from the OAuth provider
-      });
-
-      if (success) {
-        onNavigate('home');
-      } else {
-        onNavigate('signin');
-      }
-    };
-
-    handleCallback();
-  }, [oauthLogin, onNavigate]);
+    if (code) {
+      console.log('[OAuthCallback] Found authorization code, dispatching message to parent window.');
+      
+      // 2. Dispatch code back to the parent SignUp.tsx or SignIn.tsx window
+      window.opener?.postMessage(
+        { type: 'GITHUB_OAUTH_SUCCESS', code },
+        window.location.origin
+      );
+    } else {
+      console.error('[OAuthCallback] No authorization code found in URL');
+      // If something goes wrong, navigate back to signin
+      onNavigate('signin');
+    }
+  }, [onNavigate]);
 
   return (
-    <div className="w-full min-h-screen flex items-center justify-center">
+    <div className="w-full min-h-screen flex items-center justify-center bg-neutral-950">
       <div className="text-center">
-        <Loader2 className="w-12 h-12 animate-spin text-[#00AAFF] mx-auto mb-4" />
-        <p className="text-neutral-400">Completing authentication...</p>
+        <Loader2 className="w-10 h-10 animate-spin text-[#00AAFF] mx-auto mb-4" />
+        <p className="text-sm text-neutral-400 font-medium">Completing authentication...</p>
       </div>
     </div>
   );

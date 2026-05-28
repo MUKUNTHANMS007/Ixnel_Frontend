@@ -11,7 +11,7 @@ interface ProjectsPageProps {
 
 export default function Projects({ onNavigate }: ProjectsPageProps) {
   const { projects, listProjects, loadProject, createProject } = useProjectStore();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, getAvailableCredits, profile} = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const[newName, setNewName] = useState('');
@@ -68,6 +68,8 @@ export default function Projects({ onNavigate }: ProjectsPageProps) {
     );
   }
 
+  const availableCredits = getAvailableCredits();
+
   return (
     <div className="w-full relative bg-neutral-950 text-white min-h-screen">
       <div className="absolute top-0 right-0 w-[600px] h-[500px] bg-[#00AAFF]/10 blur-[120px] rounded-full pointer-events-none" />
@@ -79,10 +81,10 @@ export default function Projects({ onNavigate }: ProjectsPageProps) {
           <div className="mb-12 p-6 bg-white/[0.02] border border-white/5 rounded-[24px] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 hover:border-[#00AAFF]/20 transition-all duration-300">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-[#00AAFF] flex items-center justify-center text-neutral-950 font-black text-xl shadow-lg shadow-[#00AAFF]/25">
-                {user?.name?.[0].toUpperCase() || 'U'}
+                {profile?.username?.[0].toUpperCase() || 'U'}
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">{user?.name}</h2>
+                <h2 className="text-xl font-bold text-white">{profile?.username}</h2>
                 <p className="text-sm text-neutral-400">{user?.email}</p>
               </div>
             </div>
@@ -92,7 +94,7 @@ export default function Projects({ onNavigate }: ProjectsPageProps) {
                 <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-1">Available Credits</p>
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-[#00AAFF] fill-current" />
-                  <span className="text-2xl font-black text-white">1,250</span>
+                  <span className="text-2xl font-black text-white">{availableCredits}</span>
                 </div>
               </div>
               <button 

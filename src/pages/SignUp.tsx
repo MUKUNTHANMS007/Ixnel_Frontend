@@ -1,187 +1,389 @@
-import { useState }                          from 'react';
+// pages/SignUp.tsx
+
+import { useState } from 'react';
 import {
-  Mail, Lock, User, ArrowRight,
-  Github, Loader2, Building2, ChevronDown,
-}                                            from 'lucide-react';
-import { useAuthStore }                      from '../store/authStore';
-import { GoogleLogin }                       from '@react-oauth/google';
-import type { CredentialResponse }           from '@react-oauth/google';
-import { oauthHelpers }                      from '../lib/api';
-import { jwtDecode }                         from 'jwt-decode';
+  Mail,
+  Lock,
+  User,
+  Building2,
+  ArrowRight,
+  Github,
+  Loader2,
+  Check,
+  AlertCircle,
+} from 'lucide-react';
+import { GoogleLogin } from '@react-oauth/google';
+import type { CredentialResponse } from '@react-oauth/google';
+
+import { authAPI } from '../lib/api';
 
 interface SignUpProps {
   onNavigate: (page: string) => void;
+  onAuthSuccess: () => void;
 }
 
-interface GoogleJwtPayload {
-  sub            : string;
-  email          : string;
-  name           : string;
-  picture?       : string;
-  email_verified : boolean;
+interface PendingOAuthUser {
+  provider: 'google' | 'github';
+  email: string;
+  sub?: string;   // Google sub OR completed GitHub provider_user_id
+  code?: string;  // Raw GitHub auth code
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// User type options
-// ─────────────────────────────────────────────────────────────────────────────
-const USER_TYPE_OPTIONS = [
-  {
-    value       : 'individual' as const,
-    label       : 'Individual',
-    description : 'Personal use / freelancer',
-    icon        : User,
-  },
-  {
-    value       : 'company' as const,
-    label       : 'Company',
-    description : 'Team or business account',
-    icon        : Building2,
-  },
-];
+export default function SignUp({ onNavigate, onAuthSuccess }: SignUpProps) {
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [userType, setUserType] = useState<'individual' | 'company'>('individual');
+  const [companyName, setCompanyName] = useState('Null');
 
-export default function SignUp({ onNavigate }: SignUpProps) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // ── Form state ─────────────────────────────────────────────────────────────
-  const [username,     setUsername]     = useState('');
-  const [email,        setEmail]        = useState('');
-  const [password,     setPassword]     = useState('');
-  const [userType,     setUserType]     = useState<'individual' | 'company'>('individual');
-  const [companyName,  setCompanyName]  = useState('');
+  const [showSuccess, setShowSuccess] = useState({
+    email: '',
+    username: '',
+    user_type: '',
+    company_name: '',
+    isShown: false,
+  });
 
-  // ── OAuth pending state ────────────────────────────────────────────────────
-  // When OAuth user is new, we need user_type before completing registration
-  const [pendingOAuth, setPendingOAuth] = useState<{
-    provider         : 'google' | 'github';
-    provider_user_id : string;
-    email            : string;
-  } | null>(null);
-
-  const [oauthUserType,    setOauthUserType]    = useState<'individual' | 'company'>('individual');
+  const [pendingOAuthUser, setPendingOAuthUser] = useState<PendingOAuthUser | null>(null);
+  const [oauthUserType, setOauthUserType] = useState<'individual' | 'company'>('individual');
   const [oauthCompanyName, setOauthCompanyName] = useState('');
 
-  const { register, oauthLogin, isLoading, error, clearError } = useAuthStore();
+  const isFormValid = () => {
+    if (!email.trim() || !password.trim() || !username.trim()) return false;
+    if (password.length < 8) return false;
+    if (userType === 'company' && !companyName.trim()) return false;
+    return true;
+  };
 
-  // ── Google OAuth ───────────────────────────────────────────────────────────
+  const passwordStrength = password.length >= 8
+    ? password.length >= 12
+      ? 'strong'
+      : 'medium'
+    : 'weak';
+
   const handleGoogleLogin = async (credentialResponse: CredentialResponse) => {
-    if (!credentialResponse.credential) return;
+    if (!credentialResponse.credential) {
+      setError('Failed to retrieve authentication token from Google.');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
 
     try {
-      const decoded = jwtDecode<GoogleJwtPayload>(credentialResponse.credential);
+      const base64Url = credentialResponse.credential.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        window
+          .atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const decoded = JSON.parse(jsonPayload);
 
-      // Store pending OAuth - we need to ask user_type first
-      setPendingOAuth({
-        provider         : 'google',
-        provider_user_id : decoded.sub,
-        email            : decoded.email,
+      const response = await authAPI.oauthCallback({
+        provider: 'google',
+        provider_user_id: decoded.sub,
+        email: decoded.email,
       });
 
+      setIsLoading(false);
+
+      if (response.success && response.data) {
+        if (response.data.isNewUser) {
+          setPendingOAuthUser({
+            provider: 'google',
+            email: decoded.email,
+            sub: decoded.sub,
+          });
+        } else {
+          if (response.data.accessToken) localStorage.setItem('accessToken', response.data.accessToken);
+          if (response.data.refreshToken) localStorage.setItem('refreshToken', response.data.refreshToken);
+          onAuthSuccess();
+
+          setShowSuccess({
+            email: decoded.email,
+            username: response.data.profile?.username || 'user',
+            user_type: response.data.profile?.user_type || 'individual',
+            company_name: response.data.profile?.company_name || 'Null',
+            isShown: true,
+          });
+        }
+      } else {
+        setError(response.error || 'Google Sign In failed.');
+      }
     } catch (err) {
-      console.error('Google login decode failed:', err);
+      setIsLoading(false);
+      setError('An error occurred during Google Sign In.');
     }
   };
 
-  // ── Complete OAuth after user selects user_type ────────────────────────────
-  const handleCompleteOAuth = async () => {
-    if (!pendingOAuth) return;
+  // ─ Complete Google/GitHub OAuth signup with onboarding payload ─────────────
+  const completeOAuthSignup = async () => {
+    if (!pendingOAuthUser) return;
+    if (oauthUserType === 'company' && !oauthCompanyName.trim()) return;
 
-    if (oauthUserType === 'company' && !oauthCompanyName.trim()) {
-      return; // form validation handles display
-    }
-
-    const success = await oauthLogin({
-      provider         : pendingOAuth.provider,
-      provider_user_id : pendingOAuth.provider_user_id,
-      email            : pendingOAuth.email,
-      user_type        : oauthUserType,
-      ...(oauthUserType === 'company'
-        ? { company_name: oauthCompanyName.trim() }
-        : {}
-      ),
+    console.log('[SignUp] Completing OAuth Registration:', {
+      provider: pendingOAuthUser.provider,
+      userType: oauthUserType,
     });
 
-    if (success) {
-      onNavigate('home');
+    setIsLoading(true);
+    setError(null);
+
+    // Clean, dynamic payload mapping matching SignIn.tsx precisely
+    const payload = {
+      provider: pendingOAuthUser.provider,
+      provider_user_id: pendingOAuthUser.sub, // Holds Google sub OR GitHub provider_user_id
+      email: pendingOAuthUser.email,         // Holds Google email OR GitHub email
+      user_type: oauthUserType,
+      company_name: oauthUserType === 'company' ? oauthCompanyName.trim() : 'Null',
+    };
+
+    try {
+      const response = await authAPI.oauthCallback(payload);
+      setIsLoading(false);
+
+      if (response.success && response.data) {
+        if (response.data.accessToken) localStorage.setItem('accessToken', response.data.accessToken);
+        if (response.data.refreshToken) localStorage.setItem('refreshToken', response.data.refreshToken);
+        onAuthSuccess(); // Sync menu state immediately
+
+        setPendingOAuthUser(null);
+        onNavigate('home');
+      } else {
+        setError(response.error || 'Failed to complete OAuth registration');
+      }
+    } catch (err) {
+      setIsLoading(false);
+      setError('An unexpected connection error occurred.');
     }
   };
 
-  // ── GitHub OAuth ───────────────────────────────────────────────────────────
   const handleGithubLogin = () => {
-    oauthHelpers.initiateGithubLogin();
-  };
+    setError(null);
 
-  // ── Local register submit ──────────────────────────────────────────────────
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    clearError();
+    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID;
+    const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || `${window.location.origin}/auth/callback`;
+    const scope = 'read:user user:email';
 
-    const success = await register(
-      username.trim(),
-      email.trim(),
-      password,
-      userType,
-      userType === 'company' ? companyName.trim() : undefined,
+    const width = 500;
+    const height = 650;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=github`;
+
+    const popup = window.open(
+      authUrl,
+      'GitHub Login',
+      `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
     );
 
-    if (success) {
-      onNavigate('home');
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+
+      if (event.data && event.data.type === 'GITHUB_OAUTH_SUCCESS') {
+        const { code } = event.data;
+        console.log('[SignUp] GitHub Code successfully received directly:', code);
+        
+        if (popup) popup.close();
+        window.removeEventListener('message', handleMessage);
+
+        setIsLoading(true);
+
+        try {
+          const response = await authAPI.oauthCallback({
+            provider: 'github',
+            code,
+          });
+
+          setIsLoading(false);
+
+          if (response.success && response.data) {
+            if (response.data.isNewUser) {
+              setPendingOAuthUser({
+                provider: 'github',
+                email: response.data.email || 'Retrieving email...',
+                sub: response.data.provider_user_id!,
+              });
+            } else {
+              if (response.data.accessToken) localStorage.setItem('accessToken', response.data.accessToken);
+              if (response.data.refreshToken) localStorage.setItem('refreshToken', response.data.refreshToken);
+              onAuthSuccess();
+
+              onNavigate('home');
+            }
+          } else {
+            setError(response.error || 'GitHub Login failed.');
+          }
+        } catch (err) {
+          setIsLoading(false);
+          setError('An error occurred during GitHub Sign In.');
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isFormValid()) return;
+
+    console.log('[SignUp] Submitting Local Registration Form');
+
+    setIsLoading(true);
+    setError(null);
+
+    const payload = {
+      username: username.trim(),
+      email: email.trim(),
+      password,
+      user_type: userType,
+      company_name: userType === 'company' ? companyName.trim() : 'Null',
+    };
+
+    try {
+      const response = await authAPI.register(payload);
+      setIsLoading(false);
+
+      if (response.success && response.data) {
+        if (response.data.accessToken) localStorage.setItem('accessToken', response.data.accessToken);
+        if (response.data.refreshToken) localStorage.setItem('refreshToken', response.data.refreshToken);
+        onAuthSuccess();
+
+        setShowSuccess({
+          email: email.trim(),
+          username: username.trim(),
+          user_type: userType.trim(),
+          company_name: companyName.trim(),
+          isShown: true,
+        });
+
+        setUsername('');
+        setEmail('');
+        setPassword('');
+        setUserType('individual');
+        setCompanyName('Null');
+      } else {
+        setError(response.error || 'Registration failed');
+      }
+    } catch (err) {
+      setIsLoading(false);
+      setError('An unexpected connection error occurred.');
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // If pending OAuth → show user_type selection modal/step
-  // ─────────────────────────────────────────────────────────────────────────
-  if (pendingOAuth) {
+  // Screen Rendering layout blocks are completely unchanged...
+  if (showSuccess.isShown) {
+    return (
+      <div className="w-full min-h-[80vh] flex items-center justify-center px-4 py-12 relative">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-green-500/5 blur-[120px] rounded-full pointer-events-none" />
+        <div className="relative z-10 w-full max-w-md p-8 bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl shadow-black/50 overflow-hidden">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-green-500/30 to-transparent" />
+          <div className="text-center space-y-6 relative z-10 py-8">
+            <div className="flex justify-center">
+              <div className="w-16 h-16 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center animate-pulse">
+                <Check className="w-8 h-8 text-green-400" />
+              </div>
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-white mb-2 tracking-tight">Welcome to Ixnel! 🎉</h2>
+              <p className="text-neutral-400">Your account has been successfully created</p>
+            </div>
+            <div className="space-y-3 bg-black/30 rounded-xl p-4 border border-white/5">
+              <div className="flex items-center gap-3">
+                <Mail className="w-4 h-4 text-neutral-500 flex-shrink-0" />
+                <span className="text-sm text-neutral-300">{showSuccess.email}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <User className="w-4 h-4 text-neutral-500 flex-shrink-0" />
+                <span className="text-sm text-neutral-300">@{showSuccess.username}</span>
+              </div>
+            </div>
+            <div className="space-y-2 pt-4">
+              <button
+                onClick={() => {
+                  setShowSuccess({ ...showSuccess, isShown: false });
+                  onNavigate('signin');
+                }}
+                className="w-full flex items-center justify-center gap-2.5 py-3 bg-[#00AAFF] text-neutral-950 rounded-xl font-bold text-sm tracking-wide hover:bg-white transition-all duration-200 shadow-lg shadow-[#00AAFF]/25 hover:shadow-white/10 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                Sign in now
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (pendingOAuthUser) {
     return (
       <div className="w-full min-h-[80vh] flex items-center justify-center px-4 py-12 relative">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#00AAFF]/10 blur-[120px] rounded-full pointer-events-none" />
-
-        <div className="relative z-10 w-full max-w-md p-8 bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl shadow-black/50">
+        <div className="relative z-10 w-full max-w-md p-8 bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl shadow-black/50 overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00AAFF]/30 to-transparent" />
+          <div className="space-y-6 relative z-10">
+            <div className="text-center">
+              <div className="flex justify-center mb-4">
+                <div className="w-14 h-14 rounded-full bg-[#00AAFF]/10 border border-[#00AAFF]/30 flex items-center justify-center">
+                  <Check className="w-7 h-7 text-[#00AAFF]" />
+                </div>
+              </div>
+              <h1 className="text-2xl font-black text-white mb-2 tracking-tight">One last step</h1>
+              <p className="text-neutral-400 text-sm">
+                Signed in as{' '}
+                <span className="text-neutral-200 font-medium">{pendingOAuthUser.email}</span>
+              </p>
+            </div>
 
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-black text-white mb-2">One last step</h1>
-            <p className="text-neutral-400 text-sm">
-              Tell us how you'll be using Ixnel
-            </p>
-            <p className="text-neutral-500 text-xs mt-1">
-              Signing in as <span className="text-[#00AAFF]">{pendingOAuth.email}</span>
-            </p>
-          </div>
+            {error && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex gap-2 items-start font-medium">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
 
-          <div className="space-y-5">
-            {/* User type selection */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest">
-                Account Type
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                {USER_TYPE_OPTIONS.map(({ value, label, description, icon: Icon }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setOauthUserType(value)}
-                    className={`
-                      p-4 rounded-xl border text-left transition-all
-                      ${oauthUserType === value
-                        ? 'border-[#00AAFF] bg-[#00AAFF]/10 text-white'
-                        : 'border-white/10 bg-black/20 text-neutral-400 hover:border-white/20'
-                      }
-                    `}
-                  >
-                    <Icon className={`w-5 h-5 mb-2 ${oauthUserType === value ? 'text-[#00AAFF]' : ''}`} />
-                    <div className="font-bold text-sm">{label}</div>
-                    <div className="text-xs opacity-70 mt-0.5">{description}</div>
-                  </button>
-                ))}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Account Type</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOauthUserType('individual')}
+                  className={`flex-1 py-2.5 rounded-lg font-medium text-sm transition-all border ${
+                    oauthUserType === 'individual'
+                      ? 'bg-[#00AAFF]/20 border-[#00AAFF]/50 text-[#00AAFF]'
+                      : 'bg-black/30 border-white/10 text-neutral-400 hover:bg-black/50'
+                  }`}
+                >
+                  <User className="w-4 h-4 inline mr-1.5" />
+                  Individual
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOauthUserType('company')}
+                  className={`flex-1 py-2.5 rounded-lg font-medium text-sm transition-all border ${
+                    oauthUserType === 'company'
+                      ? 'bg-[#00AAFF]/20 border-[#00AAFF]/50 text-[#00AAFF]'
+                      : 'bg-black/30 border-white/10 text-neutral-400 hover:bg-black/50'
+                  }`}
+                >
+                  <Building2 className="w-4 h-4 inline mr-1.5" />
+                  Company
+                </button>
               </div>
             </div>
 
-            {/* Company name - conditional */}
             {oauthUserType === 'company' && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">
-                  Company Name
-                </label>
+              <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Company Name</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Building2 className="h-5 w-5 text-neutral-500" />
@@ -190,35 +392,23 @@ export default function SignUp({ onNavigate }: SignUpProps) {
                     type="text"
                     value={oauthCompanyName}
                     onChange={(e) => setOauthCompanyName(e.target.value)}
-                    required
+                    placeholder="Acme Corporation"
                     className="w-full pl-11 pr-4 py-3.5 bg-black/40 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-[#00AAFF]/50 focus:border-[#00AAFF] transition-all placeholder:text-neutral-600 font-medium"
-                    placeholder="Acme Corp"
                   />
                 </div>
               </div>
             )}
 
-            {/* Error */}
-            {error && (
-              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center font-medium">
-                {error}
-              </div>
-            )}
-
-            {/* Confirm button */}
             <button
               type="button"
-              onClick={handleCompleteOAuth}
-              disabled={
-                isLoading ||
-                (oauthUserType === 'company' && !oauthCompanyName.trim())
-              }
-              className="w-full flex items-center justify-center gap-2.5 py-4 bg-[#00AAFF] text-neutral-950 rounded-xl font-bold text-sm tracking-wide hover:bg-white transition-all duration-200 shadow-lg shadow-[#00AAFF]/25 mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              onClick={completeOAuthSignup}
+              disabled={isLoading || (oauthUserType === 'company' && !oauthCompanyName.trim())}
+              className="w-full flex items-center justify-center gap-2.5 py-4 bg-[#00AAFF] text-neutral-950 rounded-xl font-bold text-sm tracking-wide hover:bg-white transition-all duration-200 shadow-lg shadow-[#00AAFF]/25 hover:shadow-white/10 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Setting up account...
+                  Creating account...
                 </>
               ) : (
                 <>
@@ -228,16 +418,17 @@ export default function SignUp({ onNavigate }: SignUpProps) {
               )}
             </button>
 
-            {/* Back */}
             <button
               type="button"
               onClick={() => {
-                setPendingOAuth(null);
-                clearError();
+                setPendingOAuthUser(null);
+                setOauthUserType('individual');
+                setOauthCompanyName('');
+                setError(null);
               }}
-              className="w-full text-center text-sm text-neutral-500 hover:text-neutral-300 transition-colors"
+              className="w-full py-2.5 text-sm text-neutral-500 hover:text-neutral-300 transition-colors font-medium"
             >
-              ← Go back
+              Cancel
             </button>
           </div>
         </div>
@@ -245,30 +436,23 @@ export default function SignUp({ onNavigate }: SignUpProps) {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Main signup form
-  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="w-full min-h-[80vh] flex items-center justify-center px-4 py-12 relative">
-      {/* Background glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#00AAFF]/10 blur-[120px] rounded-full pointer-events-none" />
-
-      <div className="relative z-10 w-full max-w-md p-8 bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl shadow-black/50 overflow-hidden">
+      <div className="relative z-10 w-full max-w-md p-8 bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl shadow-black/50 overflow-hidden max-h-[90vh] overflow-y-auto">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00AAFF]/30 to-transparent" />
-
         <div className="text-center mb-8 relative z-10">
           <h1 className="text-3xl font-black text-white mb-2 tracking-tight">Create an account</h1>
           <p className="text-neutral-400">Join Ixnel to start creating</p>
         </div>
-
         <div className="space-y-6 relative z-10">
-
-          {/* ── Social Logins ─────────────────────────────────────────── */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             <div className="flex justify-center">
               <GoogleLogin
                 onSuccess={handleGoogleLogin}
-                onError={() => console.error('Google Login Failed')}
+                onError={() => {
+                  setError('Google Login failed.');
+                }}
                 useOneTap
                 theme="filled_black"
                 size="large"
@@ -277,7 +461,6 @@ export default function SignUp({ onNavigate }: SignUpProps) {
                 width="384"
               />
             </div>
-
             <button
               onClick={handleGithubLogin}
               disabled={isLoading}
@@ -287,60 +470,25 @@ export default function SignUp({ onNavigate }: SignUpProps) {
               Continue with GitHub
             </button>
           </div>
-
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-white/10" />
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-3 bg-neutral-950 text-neutral-500 font-medium">
-                Or continue with email
-              </span>
+              <span className="px-3 bg-neutral-950 text-neutral-500 font-medium">Or continue with email</span>
             </div>
           </div>
 
-          {/* ── Error ─────────────────────────────────────────────────── */}
           {error && (
-            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center font-medium">
-              {error}
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex gap-2 items-start font-medium">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
           )}
 
-          {/* ── Form ──────────────────────────────────────────────────── */}
           <form className="space-y-4" onSubmit={handleSubmit}>
-
-            {/* Account type selector */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">
-                Account Type
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                {USER_TYPE_OPTIONS.map(({ value, label, description, icon: Icon }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setUserType(value)}
-                    className={`
-                      p-3 rounded-xl border text-left transition-all
-                      ${userType === value
-                        ? 'border-[#00AAFF] bg-[#00AAFF]/10 text-white'
-                        : 'border-white/10 bg-black/20 text-neutral-400 hover:border-white/20'
-                      }
-                    `}
-                  >
-                    <Icon className={`w-4 h-4 mb-1.5 ${userType === value ? 'text-[#00AAFF]' : ''}`} />
-                    <div className="font-bold text-sm">{label}</div>
-                    <div className="text-xs opacity-70">{description}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Username */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">
-                Username
-              </label>
+              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Username</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <User className="h-5 w-5 text-neutral-500" />
@@ -350,39 +498,13 @@ export default function SignUp({ onNavigate }: SignUpProps) {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required
+                  placeholder="johndoe"
                   className="w-full pl-11 pr-4 py-3.5 bg-black/40 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-[#00AAFF]/50 focus:border-[#00AAFF] transition-all placeholder:text-neutral-600 font-medium"
-                  placeholder="john_doe"
                 />
               </div>
             </div>
-
-            {/* Company name - conditional */}
-            {userType === 'company' && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">
-                  Company Name
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Building2 className="h-5 w-5 text-neutral-500" />
-                  </div>
-                  <input
-                    type="text"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    required={userType === 'company'}
-                    className="w-full pl-11 pr-4 py-3.5 bg-black/40 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-[#00AAFF]/50 focus:border-[#00AAFF] transition-all placeholder:text-neutral-600 font-medium"
-                    placeholder="Acme Corp"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Email */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">
-                Email Address
-              </label>
+              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Email Address</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <Mail className="h-5 w-5 text-neutral-500" />
@@ -392,17 +514,13 @@ export default function SignUp({ onNavigate }: SignUpProps) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full pl-11 pr-4 py-3.5 bg-black/40 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-[#00AAFF]/50 focus:border-[#00AAFF] transition-all placeholder:text-neutral-600 font-medium"
                   placeholder="name@company.com"
+                  className="w-full pl-11 pr-4 py-3.5 bg-black/40 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-[#00AAFF]/50 focus:border-[#00AAFF] transition-all placeholder:text-neutral-600 font-medium"
                 />
               </div>
             </div>
-
-            {/* Password */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">
-                Password
-              </label>
+              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Password</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-neutral-500" />
@@ -413,22 +531,82 @@ export default function SignUp({ onNavigate }: SignUpProps) {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={8}
-                  className="w-full pl-11 pr-4 py-3.5 bg-black/40 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-[#00AAFF]/50 focus:border-[#00AAFF] transition-all placeholder:text-neutral-600 font-medium"
                   placeholder="••••••••"
+                  className="w-full pl-11 pr-4 py-3.5 bg-black/40 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-[#00AAFF]/50 focus:border-[#00AAFF] transition-all placeholder:text-neutral-600 font-medium"
                 />
               </div>
-              <p className="text-xs text-neutral-500 mt-1 ml-1">
-                Must be at least 8 characters long.
-              </p>
+              <div className="flex items-center gap-2 px-1">
+                <div className="flex-1 h-1 rounded-full bg-neutral-700 overflow-hidden">
+                  <div
+                    className={`h-full transition-all ${
+                      passwordStrength === 'strong' ? '✓ Strong' : passwordStrength === 'medium' ? 'Medium' : 'Weak'
+                    }`}
+                  />
+                </div>
+                <span className="text-xs text-neutral-500">
+                  {passwordStrength === 'strong' ? '✓ Strong' : passwordStrength === 'medium' ? 'Medium' : 'Weak'}
+                </span>
+              </div>
+              <p className="text-xs text-neutral-500 ml-1">Must be at least 8 characters long.</p>
+            </div>
+            <div className="space-y-1.5 pt-2">
+              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Account Type</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserType('individual');
+                    setCompanyName('Null');
+                  }}
+                  className={`flex-1 py-2.5 rounded-lg font-medium text-sm transition-all border ${
+                    userType === 'individual'
+                      ? 'bg-[#00AAFF]/20 border-[#00AAFF]/50 text-[#00AAFF]'
+                      : 'bg-black/30 border-white/10 text-neutral-400 hover:bg-black/50'
+                  }`}
+                >
+                  <User className="w-4 h-4 inline mr-1.5" />
+                  Individual
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserType('company');
+                    setCompanyName('');
+                  }}
+                  className={`flex-1 py-2.5 rounded-lg font-medium text-sm transition-all border ${
+                    userType === 'company'
+                      ? 'bg-[#00AAFF]/20 border-[#00AAFF]/50 text-[#00AAFF]'
+                      : 'bg-black/30 border-white/10 text-neutral-400 hover:bg-black/50'
+                  }`}
+                >
+                  <Building2 className="w-4 h-4 inline mr-1.5" />
+                  Company
+                </button>
+              </div>
             </div>
 
-            {/* Submit */}
+            {userType === 'company' && (
+              <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Company Name</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Building2 className="h-5 w-5 text-neutral-500" />
+                  </div>
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    required
+                    placeholder="Acme Corporation"
+                    className="w-full pl-11 pr-4 py-3.5 bg-black/40 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-[#00AAFF]/50 focus:border-[#00AAFF] transition-all placeholder:text-neutral-600 font-medium"
+                  />
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={
-                isLoading ||
-                (userType === 'company' && !companyName.trim())
-              }
+              disabled={!isFormValid() || isLoading}
               className="w-full flex items-center justify-center gap-2.5 py-4 bg-[#00AAFF] text-neutral-950 rounded-xl font-bold text-sm tracking-wide hover:bg-white transition-all duration-200 shadow-lg shadow-[#00AAFF]/25 hover:shadow-white/10 hover:scale-[1.02] active:scale-[0.98] mt-6 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               {isLoading ? (
@@ -454,7 +632,6 @@ export default function SignUp({ onNavigate }: SignUpProps) {
               Sign in
             </button>
           </p>
-
         </div>
       </div>
     </div>

@@ -1,28 +1,103 @@
+// api.ts
+
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-interface ApiOptions {
-  method?: string;
-  body?: unknown;
-  token?: string | null;
+// ─────────────────────────────────────────────────────────────────────────────
+// CORE TYPES & INTERFACES
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface User {
+  id             : string;
+  email          : string;
+  auth_provider  : string;
+  email_verified : boolean;
+  created_at     : string;
+  updated_at     : string;
 }
 
-interface ApiResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  details?: string[];
-  message?: string;
-  pagination?: {
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
+export interface UserProfile {
+  id                 : string;
+  auth_user_id       : string;
+  username           : string;
+  user_type          : 'individual' | 'company';
+  company_name       : string | null;
+  credits            : number;
+  reserved_credits   : number;
+  available_credits  : number;
+  total_credits_used : number;
+  is_blocked         : boolean;
+  created_at         : string;
+  updated_at         : string;
+}
+
+export interface ApiOptions {
+  method? : string;
+  body?   : unknown;
+  token?  : string | null;
+}
+
+export interface ApiResponse<T = unknown> {
+  success     : boolean;
+  data?       : T;
+  error?      : string;
+  message?    : string;
+  pagination? : {
+    page  : number;
+    limit : number;
+    total : number;
+    pages : number;
   };
 }
 
+export interface RegisterPayload {
+  email        : string;
+  password     : string;
+  username     : string;
+  user_type    : 'individual' | 'company';
+  company_name?: string;
+}
+
+export interface LoginPayload {
+  email    : string;
+  password : string;
+}
+
+export interface OAuthCallbackPayload {
+  provider          : 'google' | 'github';
+  provider_user_id? : string;
+  email?            : string;
+  code?             : string;
+  user_type?        : 'individual' | 'company';
+  company_name?     : string;
+}
+
+export interface AuthResponse {
+  accessToken  : string;
+  refreshToken : string;
+  user         : User;
+  profile      : UserProfile;
+  isNewUser?   : boolean;
+  provider_user_id?: string;
+  email?: string;  
+}
+
+export interface MeResponse {
+  user    : User;
+  profile : UserProfile;
+}
+
+export interface RefreshResponse {
+  accessToken  : string;
+  refreshToken : string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BASE FETCH WRAPPER (Real HTTP Callouts)
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function api<T = unknown>(
-  endpoint: string,
-  options: ApiOptions = {}
+  endpoint : string,
+  options  : ApiOptions = {},
 ): Promise<ApiResponse<T>> {
   const { method = 'GET', body, token } = options;
 
@@ -30,207 +105,195 @@ export async function api<T = unknown>(
     'Content-Type': 'application/json',
   };
 
+  // If a JWT token is passed, add the standard Bearer header
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+  const timeoutId  = setTimeout(() => controller.abort(), 10000);
 
   try {
     const res = await fetch(`${API_BASE}${endpoint}`, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
+      body   : body ? JSON.stringify(body) : undefined,
+      signal : controller.signal,
     });
 
     clearTimeout(timeoutId);
-    
-    // Parse the JSON response regardless of status code
-    const data: ApiResponse<T> = await res.json().catch(() => ({ success: false, error: `API error: ${res.status}` }));
 
-    if (!res.ok) {
-      // Return the actual error message from the backend if it exists
+    // Parse JSON response safely
+    let raw: Record<string, unknown>;
+    try {
+      raw = await res.json();
+    } catch {
+      console.error(`[api][${endpoint}] non-JSON response`, { status : res.status });
       return {
-        success: false,
-        error: data.error || `Server responded with status ${res.status}`,
+        success : false,
+        error   : `Server returned non-JSON response (status ${res.status})`,
       };
     }
 
-    return data;
-  } catch (err: any) {
+    if (import.meta.env.DEV) {
+      console.log(`[api][${endpoint}]`, {
+        status : res.status,
+        ok     : res.ok,
+        keys   : Object.keys(raw),
+      });
+    }
+
+    // Handle non-OK HTTP statuses
+    if (!res.ok) {
+      return {
+        success : false,
+        error   : (raw.error as string) || `Server error: ${res.status}`,
+      };
+    }
+
+    // Pull out envelop keys and normalize payload data
+    const { success, error, message, pagination, ...payload } = raw;
+
+    return {
+      success    : success as boolean,
+      error      : error      as string | undefined,
+      message    : message    as string | undefined,
+      pagination : pagination as ApiResponse['pagination'],
+      data       : payload    as T,
+    };
+
+  } catch (err: unknown) {
     clearTimeout(timeoutId);
-    console.error(`API Fetch Error [${endpoint}]:`, err);
-    return { 
-      success: false, 
-      error: err.name === 'AbortError' ? 'Request timed out' : 'Network error. Is the server running?' 
+
+    const isAbort   = err instanceof Error && err.name === 'AbortError';
+    const isNetwork = err instanceof TypeError;
+
+    console.error(`[api][${endpoint}] fetch exception:`, {
+      type   : err instanceof Error ? err.name    : 'unknown',
+      reason : err instanceof Error ? err.message : String(err),
+    });
+
+    return {
+      success : false,
+      error   : isAbort
+        ? 'Request timed out. Please try again.'
+        : isNetwork
+          ? 'Network error. Is the server running?'
+          : 'Unexpected error. Please try again.',
     };
   }
 }
 
-// ============================================================
+// ─────────────────────────────────────────────────────────────────────────────
 // AUTH API METHODS
-// ============================================================
-
-// ── RegisterPayload ────────────────────────────────────────────────
-export interface RegisterPayload {
-  email         : string;
-  password      : string;
-  username      : string;                       // was "name"
-  user_type     : 'individual' | 'company';     // new required field
-  company_name ?: string;                       // conditional
-}
-
-export interface LoginPayload {
-  email: string;
-  password: string;
-}
-
-export interface OAuthCallbackPayload {
-  provider          : 'google' | 'github';
-  provider_user_id  : string;                   // now required
-  email             : string;
-  user_type         : 'individual' | 'company'; // required for new users
-  company_name     ?: string;
-}
-
-export interface AuthResponse {
-  user    : {
-    id             : string;
-    email          : string;
-    name           : string;           // username mapped to name
-    auth_provider  : string;
-    email_verified : boolean;
-  };
-  profile : {                          // ← added
-    id                : string;
-    username          : string;
-    user_type         : 'individual' | 'company';
-    company_name      : string | null;
-    credits           : number;
-    reserved_credits  : number;
-    available_credits : number;
-    is_blocked        : boolean;
-  };
-  accessToken  : string;
-  refreshToken : string;
-}
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const authAPI = {
-  // Local registration
   register: async (payload: RegisterPayload): Promise<ApiResponse<AuthResponse>> => {
+    // Exclude undefined parameters
+    const cleanPayload = Object.fromEntries(
+      Object.entries(payload).filter(([, v]) => v !== undefined)
+    );
     return api<AuthResponse>('/auth/register', {
-      method: 'POST',
-      body: payload,
+      method : 'POST',
+      body   : cleanPayload,
     });
   },
 
-  // Local login
   login: async (payload: LoginPayload): Promise<ApiResponse<AuthResponse>> => {
     return api<AuthResponse>('/auth/login', {
-      method: 'POST',
-      body: payload,
+      method : 'POST',
+      body   : payload,
     });
   },
 
-  // OAuth callback
   oauthCallback: async (payload: OAuthCallbackPayload): Promise<ApiResponse<AuthResponse>> => {
+    const cleanPayload = Object.fromEntries(
+      Object.entries(payload).filter(([, v]) => v !== undefined)
+    );
     return api<AuthResponse>('/auth/oauth/callback', {
-      method: 'POST',
-      body: payload,
+      method : 'POST',
+      body   : cleanPayload,
     });
   },
 
-  // Verify email
-  verifyEmail: async (token: string): Promise<ApiResponse> => {
-    return api(`/auth/verify-email?token=${token}`);
-  },
-
-  // Forgot password
-  forgotPassword: async (email: string): Promise<ApiResponse> => {
-    return api('/auth/forgot-password', {
-      method: 'POST',
-      body: { email },
-    });
-  },
-
-  // Reset password
-  resetPassword: async (token: string, newPassword: string): Promise<ApiResponse> => {
-    return api('/auth/reset-password', {
-      method: 'POST',
-      body: { token, newPassword },
-    });
-  },
-
-  // ── refreshToken response - now returns both tokens ──────────────────────────
-refreshToken: async (
-  refreshToken: string
-): Promise<ApiResponse<{ accessToken: string; refreshToken: string }>> => {
-  return api<{ accessToken: string; refreshToken: string }>('/auth/refresh', {
-    method : 'POST',
-    body   : { refreshToken },
-  });
-},
-
-  // Logout
-  logout: async (token: string): Promise<ApiResponse> => {
-    return api('/auth/logout', {
-      method: 'POST',
+  me: async (token: string): Promise<ApiResponse<MeResponse>> => {
+    return api<MeResponse>('/auth/me', {
+      method : 'GET',
       token,
     });
   },
 
-  me: async (token: string): Promise<ApiResponse<User>> => {
-    return api<User>('/auth/me', {
-      method: 'GET',
+  verifyEmail: async (token: string): Promise<ApiResponse> => {
+    return api(`/auth/verify-email?token=${encodeURIComponent(token)}`);
+  },
+
+  forgotPassword: async (email: string): Promise<ApiResponse> => {
+    return api('/auth/forgot-password', {
+      method : 'POST',
+      body   : { email },
+    });
+  },
+
+  resetPassword: async (token: string, newPassword: string): Promise<ApiResponse> => {
+    return api('/auth/reset-password', {
+      method : 'POST',
+      body   : { token, newPassword },
+    });
+  },
+
+  refreshToken: async (refreshToken: string): Promise<ApiResponse<RefreshResponse>> => {
+    return api<RefreshResponse>('/auth/refresh', {
+      method : 'POST',
+      body   : { refreshToken },
+    });
+  },
+
+  logout: async (token: string): Promise<ApiResponse> => {
+    return api('/auth/logout', {
+      method : 'POST',
       token,
     });
   },
 };
 
-// Add User interface
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  auth_provider: string;
-  email_verified: boolean;
-  role?: 'admin' | 'user';
-}
-
-// ============================================================
+// ─────────────────────────────────────────────────────────────────────────────
 // OAUTH HELPERS
-// ============================================================
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const oauthHelpers = {
-  // Initialize GitHub OAuth
-  initiateGithubLogin: () => {
-    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID;
-    const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || `${window.location.origin}/auth/callback`;
+  initiateGithubLogin: (): void => {
+    const clientId    = import.meta.env.VITE_GITHUB_CLIENT_ID;
+    const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI
+      || `${window.location.origin}/auth/callback`;
     const scope = 'read:user user:email';
-    
-    const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=github`;
-    
-    window.location.href = githubAuthUrl;
+
+    if (!clientId) {
+      console.error('[oauthHelpers] VITE_GITHUB_CLIENT_ID is not set');
+      return;
+    }
+
+    const params = new URLSearchParams({
+      client_id    : clientId,
+      redirect_uri : redirectUri,
+      scope,
+      state        : 'github',
+    });
+
+    window.location.href = `https://github.com/login/oauth/authorize?${params.toString()}`;
   },
 
-  // Parse OAuth callback
-  parseOAuthCallback: (): { provider: 'google' | 'github'; code: string } | null => {
+  parseOAuthCallback: (): { provider : 'google' | 'github'; code : string } | null => {
     const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    const state = params.get('state');
+    const code   = params.get('code');
+    const state  = params.get('state');
 
     if (!code || !state) return null;
+    if (!['google', 'github'].includes(state)) return null;
 
     return {
-      provider: state as 'google' | 'github',
+      provider : state as 'google' | 'github',
       code,
     };
   },
 };
-
-export interface MeResponse {
-  user    : AuthResponse['user'];
-  profile : AuthResponse['profile'];
-}
