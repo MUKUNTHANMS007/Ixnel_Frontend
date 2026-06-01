@@ -1,14 +1,14 @@
+// pages/Products.tsx
+
 import { motion } from 'framer-motion';
 import { Palette, Layers, Wind, ArrowRight, Puzzle, FileText } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
 
 interface ProductsProps {
   onNavigate?: (page: string) => void;
+  isAuthenticated: boolean; // Added
 }
 
-export default function ProductsPage({ onNavigate }: ProductsProps) {
-  const { isAuthenticated } = useAuthStore();
-
+export default function ProductsPage({ onNavigate, isAuthenticated }: ProductsProps) {
   return (
     <div className="w-full bg-neutral-950 min-h-screen pt-12 pb-24 px-6 relative overflow-hidden">
       {/* Background Glow */}

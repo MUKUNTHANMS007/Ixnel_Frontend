@@ -16,15 +16,14 @@ import FeedbackPage from './pages/FeedbackPage';
 import Editor from './pages/Editor';
 import ProfilePage from './pages/Profile';
 import OAuthCallback from './components/OAuthCallback';
-
-import { Loader2 } from 'lucide-react';
-
-// Import authAPI and Types directly from api.ts
 import { authAPI } from '../src/lib/api';
-import type { User, UserProfile } from '../src/lib/api';
+import type { User, UserProfile, SubscriptionRecord } from '../src/lib/api';
+import PipelinePage from './pages/PipelinePage';
+
 import {
   Home as HomeIcon,
   FileText,
+  Loader2,
   Newspaper,
   LogIn,
   LogOut,
@@ -36,21 +35,42 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  const [activePage, setActivePage] = useState('home');
+  // ─ Persistent Routing State ─────────────────────────────────────────────
+  const [activePage, setActivePage] = useState<string>(() => {
+    const savedPage = localStorage.getItem('activePage');
+    // Avoid staying stuck on temporary popup page on reload
+    if (savedPage === 'oauth-callback') return 'home';
+    return savedPage || 'home';
+  });
 
-  // ─ Central Authentication State (Bypassing authStore) ───────────────────
+  // ─ Central Authentication State ──────────────────────────────────────────
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [payments, setPayments] = useState<any[]>([]); 
+  const [subscription, setSubscription] = useState<SubscriptionRecord | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  // ─ Unified Navigation Wrapper (Updates state & localStorage) ─────────────
+  const navigateAndPersist = (page: string) => {
+    if (page === 'logout') {
+      handleLogout();
+      return;
+    }
+    localStorage.setItem('activePage', page);
+    setActivePage(page);
+  };
 
   // ─ Restore Active Session from localStorage on mount ────────────────────
   const restoreSession = async () => {
     const token = localStorage.getItem('accessToken');
+    
+    // Safety check: Treat string 'undefined' or 'null' as no session
     if (!token || token === 'undefined' || token === 'null') {
       setIsAuthenticated(false);
       setUser(null);
       setProfile(null);
+      setSubscription(null); // Add this [1]
       setIsAuthLoading(false);
       return;
     }
@@ -61,13 +81,15 @@ export default function App() {
         setIsAuthenticated(true);
         setUser(response.data.user);
         setProfile(response.data.profile);
+        setSubscription(response.data.subscription || null); // Add this line [1]
+        setPayments(response.data.payments || []);
       } else {
-        // Token expired/invalid, clear local memory
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         setIsAuthenticated(false);
         setUser(null);
         setProfile(null);
+        setSubscription(null); // Add this [1]
       }
     } catch (err) {
       console.error('[App] Failed to restore session:', err);
@@ -103,21 +125,16 @@ export default function App() {
     }
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
+    localStorage.removeItem('activePage');
     setIsAuthenticated(false);
     setUser(null);
     setProfile(null);
+    setSubscription(null); // Add this line [1]
+    setPayments([]);
     setActivePage('home');
   };
 
-  const handleNavigation = (page: string) => {
-    if (page === 'logout') {
-      handleLogout();
-      return;
-    }
-    setActivePage(page);
-  };
-
-  // ─ Dynamic Navigation bar Items ──────────────────────────────────────────
+  // Dynamic Navigation bar Items
   const navItems = [
     { name: 'Home', id: 'home', icon: HomeIcon },
     { name: 'Products', id: 'products', icon: Video },
@@ -139,23 +156,26 @@ export default function App() {
   // ─ Render page contents with props ───────────────────────────────────────
   const renderContent = () => {
     switch (activePage) {
-      case 'home':           return <Home onNavigate={setActivePage} />;
+      case 'home':           return <Home onNavigate={navigateAndPersist} />;
       case 'docs':           return <Docs />;
       case 'news':           return <News />;
-      case 'products':       return <ProductsPage onNavigate={setActivePage} />;
-      case 'projects':       return <Projects onNavigate={setActivePage} isAuthenticated={isAuthenticated} user={user} profile={profile} />;
-      case 'pricing':        return <PricingPage />;
-      case 'editor':         return <Editor onNavigate={setActivePage} />;
+      case 'products':       
+        return <ProductsPage onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated} />;
+      case 'pipeline':       return <PipelinePage onNavigate={setActivePage}/>
+      case 'projects':       
+        return <Projects onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated} user={user} profile={profile} />;
+      case 'pricing':        return <PricingPage onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated}  subscription={subscription} onAuthSuccess={restoreSession}/>;
+      case 'editor':         return <Editor onNavigate={navigateAndPersist} />;
       case 'feedback':       return <FeedbackPage />;
       case 'signin':         
-        return <SignIn onNavigate={setActivePage} onAuthSuccess={restoreSession} />;
+        return <SignIn onNavigate={navigateAndPersist} onAuthSuccess={restoreSession} />;
       case 'signup':         
-        return <SignUp onNavigate={setActivePage} onAuthSuccess={restoreSession} />;
-      case 'result':         return <ResultPage onNavigate={setActivePage} />;
+        return <SignUp onNavigate={navigateAndPersist} onAuthSuccess={restoreSession} />;
+      case 'result':         return <ResultPage onNavigate={navigateAndPersist} />;
       case 'profile':        
-        return <ProfilePage onNavigate={setActivePage} user={user} profile={profile} onLogout={handleLogout} />;
-      case 'oauth-callback': return <OAuthCallback onNavigate={setActivePage} />;
-      default:               return <Home onNavigate={setActivePage} />;
+        return <ProfilePage onNavigate={navigateAndPersist} user={user} profile={profile} subscription={subscription} onLogout={handleLogout} payments={payments}/>;
+      case 'oauth-callback': return <OAuthCallback onNavigate={navigateAndPersist} />;
+      default:               return <Home onNavigate={navigateAndPersist} />;
     }
   };
 
@@ -167,7 +187,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-neutral-950 text-white selection:bg-[#00AAFF]/30 selection:text-white">
       {showNavbar && (
-        <NavBar items={navItems} onNavigate={handleNavigation} activePage={activePage} />
+        <NavBar items={navItems} onNavigate={navigateAndPersist} activePage={activePage} />
       )}
 
       {/* Floating Auth Indicators */}
