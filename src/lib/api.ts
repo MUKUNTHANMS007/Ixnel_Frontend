@@ -14,7 +14,6 @@ export interface User {
   created_at     : string;
   updated_at     : string;
 }
-
 export interface UserProfile {
   id                 : string;
   auth_user_id       : string;
@@ -22,12 +21,31 @@ export interface UserProfile {
   user_type          : 'individual' | 'company';
   company_name       : string | null;
   credits            : number;
+  subscription_credits: number; // Added to support separated balance rendering [1.2.4]
+  purchased_credits  : number;  // Added to support separated balance rendering [1.2.4]
   reserved_credits   : number;
   available_credits  : number;
   total_credits_used : number;
   is_blocked         : boolean;
   created_at         : string;
   updated_at         : string;
+}
+
+// Subscription interface matching your Postgres schema
+export interface SubscriptionRecord {
+  id: string;
+  profile_id: string;
+  payment_provider: 'paddle' | 'razorpay';
+  provider_subscription_id: string;
+  provider_customer_id: string;
+  plan_code: string;
+  subscription_status: 'active' | 'cancelled' | 'past_due' | 'trialing' | 'expired';
+  billing_cycle: 'monthly' | 'yearly';
+  current_period_start: string;
+  current_period_end: string;
+  cancel_at_period_end: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ApiOptions {
@@ -81,9 +99,21 @@ export interface AuthResponse {
   email?: string;  
 }
 
+export interface PaymentRecord {
+  id: string;
+  amount: number;
+  payment_status: 'pending' | 'processing' | 'completed' | 'cancelled' | 'chargeback';
+  created_at: string;
+  currency_code: string;
+  payment_type: 'credit_purchase' | 'subscription' | 'addon_purchase' | 'enterprise_invoice';
+  credits_added: number | null;
+}
+
 export interface MeResponse {
-  user    : User;
-  profile : UserProfile;
+  user          : User;
+  profile       : UserProfile;
+  subscription? : SubscriptionRecord | null; // Added supporting dynamic persistence [1]
+  payments?     : PaymentRecord[];
 }
 
 export interface RefreshResponse {
@@ -252,6 +282,21 @@ export const authAPI = {
   logout: async (token: string): Promise<ApiResponse> => {
     return api('/auth/logout', {
       method : 'POST',
+      token,
+    });
+  },
+
+  /**
+   * Securely requests the backend to cancel the active subscription.
+   */
+  cancelSubscription: async (): Promise<ApiResponse<void>> => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      return { success: false, error: 'Authentication is required.' };
+    }
+    // Requests cancellation on the authenticated session
+    return api<void>('/payments/cancel-subscription', {
+      method: 'POST',
       token,
     });
   },

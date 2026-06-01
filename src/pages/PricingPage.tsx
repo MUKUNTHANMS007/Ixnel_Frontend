@@ -1,6 +1,23 @@
+// pages/PricingPage.tsx
+
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Zap, Crown, Building2, HelpCircle, ArrowRight, Sparkles, Shield, Cpu, Layers } from 'lucide-react';
+import { 
+  Check, 
+  Zap, 
+  Crown, 
+  Building2, 
+  HelpCircle, 
+  ArrowRight, 
+  Sparkles, 
+  Shield, 
+  Cpu, 
+  Layers, 
+  Loader2 
+} from 'lucide-react';
+
+import { paymentService } from '../lib/payment_service';
+import type { SubscriptionRecord } from '../lib/api'; // Safe type-only import
 
 interface PricingPlan {
   name: string;
@@ -16,9 +33,16 @@ interface PricingPlan {
   icon: React.ReactNode;
 }
 
+interface PricingPageProps {
+  onNavigate: (page: string) => void;
+  isAuthenticated: boolean;
+  subscription: SubscriptionRecord | null; // Passed down from App.tsx
+  onAuthSuccess: () => void;
+}
+
 const animatorPlans: PricingPlan[] = [
   {
-    name: "Starter",
+    name: "Limited",
     price: { monthly: "$0", yearly: "$0" },
     description: "Perfect for hobbyists exploring AI animation for the first time.",
     icon: <Zap className="w-5 h-5" />,
@@ -69,20 +93,6 @@ const animatorPlans: PricingPlan[] = [
 
 const nonAnimatorPlans: PricingPlan[] = [
   {
-    name: "Casual",
-    price: { monthly: "$9", yearly: "$7" },
-    description: "For simple AI-assisted visuals and quick renders.",
-    icon: <Sparkles className="w-5 h-5" />,
-    features: [
-      "20 Generations / month",
-      "Standard HD Resolution",
-      "Basic AI Enhancement",
-      "Cloud Storage (10GB)",
-      "Standard Support",
-    ],
-    cta: "Get Started",
-  },
-  {
     name: "Credit Pack",
     price: { monthly: "$15", yearly: "$15", oneTime: "$15" },
     description: "One-time credit recharge. No subscription required.",
@@ -93,7 +103,7 @@ const nonAnimatorPlans: PricingPlan[] = [
       "Never Expires",
       "4K Rendering Support",
       "Priority Single Queue",
-      "Easy UPI/Card Checkout",
+      "Easy Card Checkout",
     ],
     cta: "Buy Credits",
   },
@@ -110,15 +120,75 @@ const faqs = [
   },
   {
     q: "What payment methods do you support?",
-    a: "We currently support Credit/Debit cards via Razorpay for domestic and international payments. UPI and other local methods are being integrated.",
+    a: "We currently support Credit/Debit cards and global checkout networks via Paddle, including local regional integrations.",
   },
 ];
 
-export default function PricingPage() {
+export default function PricingPage({ onNavigate, isAuthenticated, subscription, onAuthSuccess }: PricingPageProps) {
   const [isYearly, setIsYearly] = useState(false);
-  const [segment, setSegment] = useState<'animator' | 'non-animator'>('animator');
+  const [segment, setSegment] = useState<'subscription' | 'one-time'>('subscription');
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  const currentPlans = segment === 'animator' ? animatorPlans : nonAnimatorPlans;
+  const currentPlans = segment === 'subscription' ? animatorPlans : nonAnimatorPlans;
+
+  const getPaddlePriceId = (planName: string, yearlyBilling: boolean): string | null => {
+    if (planName === 'Professional') {
+      return yearlyBilling
+        ? import.meta.env.VITE_PADDLE_PRICE_ID_PRO_YEARLY
+        : import.meta.env.VITE_PADDLE_PRICE_ID_PRO_MONTHLY;
+    }
+    if (planName === 'Credit Pack') {
+      return import.meta.env.VITE_PADDLE_PRICE_ID_CREDITS_50;
+    }
+    return null;
+  };
+
+  // Evaluate active subscription status [1.2.4]
+  const hasActiveSub = Boolean(subscription && ['active', 'trialing', 'past_due'].includes(subscription.subscription_status));
+  const activePlanPriceId = hasActiveSub ? subscription?.plan_code ?? null : null;
+
+  const handlePlanSelection = async (plan: PricingPlan) => {
+    if (!isAuthenticated) {
+      onNavigate('signin');
+      return;
+    }
+
+    if (plan.name === 'Limited') {
+      onNavigate('home');
+      return;
+    }
+
+    if (plan.name === 'Studio') {
+      window.location.href = 'mailto:sales@ixnel.com?subject=Studio%20Plan%20Inquiry';
+      return;
+    }
+
+    // 1. Double check: Ensure users cannot purchase multiple active subscriptions [1.2.4]
+    if (plan.name === 'Professional' && hasActiveSub) {
+      alert('You already have an active subscription. You cannot purchase multiple plans simultaneously.');
+      return;
+    }
+
+    const priceId = getPaddlePriceId(plan.name, isYearly);
+    if (!priceId) {
+      alert('This pricing tier is not currently configured in your database environment.');
+      return;
+    }
+
+    setIsCheckoutLoading(plan.name);
+
+    try {
+      await paymentService.openCheckout(priceId, () => {
+        setShowSuccessModal(true); // Triggers success modal upon overlay close [2.1.4]
+      });
+    } catch (err) {
+      console.error('[PricingPage] Checkout failed to load:', err);
+      alert('An error occurred while loading your secure checkout overlay.');
+    } finally {
+      setIsCheckoutLoading(null);
+    }
+  };
 
   return (
     <div className="w-full min-h-screen bg-neutral-950 relative overflow-hidden">
@@ -156,7 +226,7 @@ export default function PricingPage() {
             transition={{ delay: 0.1 }}
             className="flex items-center justify-center p-1.5 bg-white/[0.04] border border-white/10 rounded-2xl w-fit mx-auto mb-10"
           >
-            {(['animator', 'non-animator'] as const).map((seg) => (
+            {(['subscription', 'one-time'] as const).map((seg) => (
               <button
                 key={seg}
                 onClick={() => setSegment(seg)}
@@ -166,7 +236,7 @@ export default function PricingPage() {
                     : 'text-neutral-400 hover:text-white'
                 }`}
               >
-                {seg === 'animator' ? 'Animator Segment' : 'Non-Animators'}
+                {seg === 'subscription' ? 'Subscription Plans' : 'One-Time Top-ups'}
               </button>
             ))}
           </motion.div>
@@ -175,106 +245,165 @@ export default function PricingPage() {
             Tailored plans for professional creators and casual enthusiasts alike.
           </p>
 
-          {/* Billing Toggle */}
-          <div className="mt-10 flex items-center justify-center gap-4">
-            <span className={`text-sm font-bold transition-colors ${!isYearly ? 'text-white' : 'text-neutral-500'}`}>
-              Monthly
-            </span>
-            <button
-              onClick={() => setIsYearly(!isYearly)}
-              className="w-14 h-7 bg-white/[0.06] border border-white/10 rounded-full p-1 relative transition-all hover:border-[#00AAFF]/40"
-            >
-              <div
-                className={`w-5 h-5 bg-[#00AAFF] rounded-full shadow-md shadow-[#00AAFF]/30 transition-transform duration-300 ${
-                  isYearly ? 'translate-x-7' : 'translate-x-0'
-                }`}
-              />
-            </button>
-            <span className={`text-sm font-bold transition-colors flex items-center gap-2 ${isYearly ? 'text-white' : 'text-neutral-500'}`}>
-              Yearly
-              <span className="text-[#00AAFF] bg-[#00AAFF]/10 border border-[#00AAFF]/20 px-2 py-0.5 rounded text-[10px] font-black tracking-widest uppercase">
-                Save 20%
+          {/* Billing Toggle (Hidden for Top-up credits segment) */}
+          {segment === 'subscription' && (
+            <div className="mt-10 flex items-center justify-center gap-4">
+              <span className={`text-sm font-bold transition-colors ${!isYearly ? 'text-white' : 'text-neutral-500'}`}>
+                Monthly
               </span>
-            </span>
-          </div>
+              <button
+                onClick={() => setIsYearly(!isYearly)}
+                className="w-14 h-7 bg-white/[0.06] border border-white/10 rounded-full p-1 relative transition-all hover:border-[#00AAFF]/40"
+              >
+                <div
+                  className={`w-5 h-5 bg-[#00AAFF] rounded-full shadow-md shadow-[#00AAFF]/30 transition-transform duration-300 ${
+                    isYearly ? 'translate-x-7' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+              <span className={`text-sm font-bold transition-colors flex items-center gap-2 ${isYearly ? 'text-white' : 'text-neutral-500'}`}>
+                Yearly
+                <span className="text-[#00AAFF] bg-[#00AAFF]/10 border border-[#00AAFF]/20 px-2 py-0.5 rounded text-[10px] font-black tracking-widest uppercase">
+                  Save 20%
+                </span>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* ─── Pricing Cards ─── */}
-        <div className={`grid grid-cols-1 md:grid-cols-${currentPlans.length} gap-6 mb-32 max-w-6xl mx-auto`}>
-          {currentPlans.map((plan, idx) => (
-            <motion.div
-              key={plan.name}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.08 }}
-              whileHover={{ y: -6 }}
-              className={`relative p-8 rounded-3xl border flex flex-col items-start overflow-hidden ${
-                plan.popular
-                  ? 'border-[#00AAFF]/30 bg-[#00AAFF]/5 shadow-2xl shadow-[#00AAFF]/10'
-                  : 'border-white/5 bg-white/[0.03]'
-              }`}
-            >
-              {/* Popular badge */}
-              {plan.popular && (
-                <div className="absolute -top-px left-1/2 -translate-x-1/2 px-5 py-1 bg-[#00AAFF] text-neutral-950 text-[10px] font-black rounded-b-xl tracking-widest uppercase shadow-lg shadow-[#00AAFF]/30">
-                  Most Popular
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-32 max-w-6xl mx-auto justify-center">
+          {currentPlans.map((plan, idx) => {
+            const planPriceId = getPaddlePriceId(plan.name, isYearly);
+            
+            // Evaluates active plan button configurations [1.2.4]
+            const isCurrentActivePlan = hasActiveSub && activePlanPriceId === planPriceId;
+            const shouldDisableSubButton = hasActiveSub && segment === 'subscription';
+
+            return (
+              <motion.div
+                key={plan.name}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.08 }}
+                whileHover={{ y: -6 }}
+                className={`relative p-8 rounded-3xl border flex flex-col items-start overflow-hidden ${
+                  plan.popular
+                    ? 'border-[#00AAFF]/30 bg-[#00AAFF]/5 shadow-2xl shadow-[#00AAFF]/10'
+                    : 'border-white/5 bg-white/[0.03]'
+                }`}
+              >
+                {plan.popular && (
+                  <div className="absolute -top-px left-1/2 -translate-x-1/2 px-5 py-1 bg-[#00AAFF] text-neutral-950 text-[10px] font-black rounded-b-xl tracking-widest uppercase shadow-lg shadow-[#00AAFF]/30">
+                    Most Popular
+                  </div>
+                )}
+
+                {plan.popular && (
+                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00AAFF]/70 to-transparent" />
+                )}
+
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-6 mt-4 border transition-all ${
+                  plan.popular
+                    ? 'bg-[#00AAFF]/15 border-[#00AAFF]/30 text-[#00AAFF]'
+                    : 'bg-white/[0.06] border-white/10 text-neutral-400'
+                }`}>
+                  {plan.icon}
                 </div>
-              )}
 
-              {/* Top edge glow for popular */}
-              {plan.popular && (
-                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00AAFF]/70 to-transparent" />
-              )}
+                <h3 className="text-xl font-black text-white mb-2">{plan.name}</h3>
+                <p className="text-sm text-neutral-500 font-medium mb-7 leading-relaxed">{plan.description}</p>
 
-              {/* Icon */}
-              <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-6 mt-4 border transition-all ${
-                plan.popular
-                  ? 'bg-[#00AAFF]/15 border-[#00AAFF]/30 text-[#00AAFF]'
-                  : 'bg-white/[0.06] border-white/10 text-neutral-400'
-              }`}>
-                {plan.icon}
+                <div className="flex items-baseline gap-1 mb-7">
+                  <span className="text-4xl font-black text-white">
+                    {isYearly ? plan.price.yearly : plan.price.monthly}
+                  </span>
+                  {plan.price.monthly !== 'Custom' && (
+                    <span className="text-neutral-500 font-semibold text-sm">
+                      {segment === 'one-time' ? '' : '/mo'}
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => handlePlanSelection(plan)}
+                  disabled={isCheckoutLoading !== null || shouldDisableSubButton || isCurrentActivePlan}
+                  className={`w-full py-3.5 rounded-2xl font-bold text-sm transition-all duration-200 flex items-center justify-center gap-2 mb-8 disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isCurrentActivePlan || shouldDisableSubButton
+                      ? 'bg-neutral-900 border border-white/5 text-neutral-500 hover:bg-neutral-900'
+                      : plan.popular
+                        ? 'bg-[#00AAFF] text-neutral-950 hover:bg-white shadow-lg shadow-[#00AAFF]/25'
+                        : 'bg-white/[0.07] text-white border border-white/10 hover:bg-white/10 hover:border-white/20'
+                  }`}
+                >
+                  {isCheckoutLoading === plan.name ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Opening Checkout...
+                    </>
+                  ) : isCurrentActivePlan ? (
+                    'Current Plan' // Active plan status [1.2.4]
+                  ) : shouldDisableSubButton ? (
+                    'Already Subscribed' // Enforces single subscription limit [1.2.4]
+                  ) : (
+                    <>
+                      {plan.cta}
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+
+                <div className="space-y-3.5 w-full">
+                  {plan.features.map((feature) => (
+                    <div key={feature} className="flex items-center gap-3 text-sm text-neutral-400 font-medium">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 border ${
+                        plan.popular
+                          ? 'bg-[#00AAFF]/10 border-[#00AAFF]/25 text-[#00AAFF]'
+                          : 'bg-white/[0.05] border-white/10 text-neutral-500'
+                      }`}>
+                        <Check className="w-3 h-3" />
+                      </div>
+                      {feature}
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        {/* ─── Interactive Payment Success Modal ─── */}
+        {showSuccessModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <div className="relative w-full max-w-md p-8 bg-[#0a0a0a] border border-white/10 rounded-3xl shadow-2xl space-y-6 text-center overflow-hidden">
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00AAFF]/50 to-transparent" />
+              
+              <div className="flex justify-center">
+                <div className="w-16 h-16 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center animate-pulse">
+                  <Check className="w-8 h-8 text-green-400" />
+                </div>
               </div>
 
-              <h3 className="text-xl font-black text-white mb-2">{plan.name}</h3>
-              <p className="text-sm text-neutral-500 font-medium mb-7 leading-relaxed">{plan.description}</p>
-
-              <div className="flex items-baseline gap-1 mb-7">
-                <span className="text-4xl font-black text-white">
-                  {isYearly ? plan.price.yearly : plan.price.monthly}
-                </span>
-                {plan.price.monthly !== 'Custom' && (
-                  <span className="text-neutral-500 font-semibold text-sm">/mo</span>
-                )}
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black text-white tracking-tight">Payment Successful !</h3>
+                <p className="text-neutral-400 text-sm">
+                  Your transaction has been processed securely and successfully. Your plan benefits and credit balances has been allocated to your profile.
+                </p>
               </div>
 
               <button
-                className={`w-full py-3.5 rounded-2xl font-bold text-sm transition-all duration-200 flex items-center justify-center gap-2 mb-8 ${
-                  plan.popular
-                    ? 'bg-[#00AAFF] text-neutral-950 hover:bg-white shadow-lg shadow-[#00AAFF]/25'
-                    : 'bg-white/[0.07] text-white border border-white/10 hover:bg-white/10 hover:border-white/20'
-                }`}
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  onAuthSuccess(); // Triggers App.tsx to load fresh balances
+                  onNavigate('profile'); // Instantly redirects to profile
+                }}
+                className="w-full py-3.5 bg-[#00AAFF] text-neutral-950 rounded-xl font-bold hover:bg-white transition-all shadow-lg shadow-[#00AAFF]/25 flex items-center justify-center gap-2"
               >
-                {plan.cta}
-                <ArrowRight className="w-4 h-4" />
+                Go to Profile <ArrowRight className="w-4 h-4" />
               </button>
-
-              <div className="space-y-3.5 w-full">
-                {plan.features.map((feature) => (
-                  <div key={feature} className="flex items-center gap-3 text-sm text-neutral-400 font-medium">
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 border ${
-                      plan.popular
-                        ? 'bg-[#00AAFF]/10 border-[#00AAFF]/25 text-[#00AAFF]'
-                        : 'bg-white/[0.05] border-white/10 text-neutral-500'
-                    }`}>
-                      <Check className="w-3 h-3" />
-                    </div>
-                    {feature}
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          ))}
-        </div>
+            </div>
+          </div>
+        )}
 
         {/* ─── Feature Comparison ─── */}
         <section className="mb-32">
