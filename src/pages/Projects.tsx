@@ -13,11 +13,13 @@ import {
   Shield, 
   Building2, 
   User,
-  Calendar
+  Calendar,
+  Trash2,
+  X,
+  AlertTriangle
 } from 'lucide-react';
 import { useEditorStore } from '../store/editorStore';
 
-// Type-safe imports for API and structural schemas [1.1.9, 1.3.1]
 import { projectAPI } from '../lib/project_api';
 import type { Project } from '../lib/project_api';
 import type { User as UserType, UserProfile } from '../lib/api';
@@ -30,7 +32,7 @@ interface ProjectsPageProps {
 }
 
 export default function Projects({ onNavigate, isAuthenticated, user, profile }: ProjectsPageProps) {
-  // ─ Local React State (No store dependencies) ──────────────────────────────
+  // ─ Local React State ──────────────────────────────────────────────────────
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -38,17 +40,21 @@ export default function Projects({ onNavigate, isAuthenticated, user, profile }:
   const [showNew, setShowNew] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Default new projects to 'cloud' storage, matching your database standard [1.2.4]
-  const [storageMode, setStorageMode] = useState<'cloud' | 'local'>('cloud');
+  // Default to 'local' since cloud sync is disabled for now [1.2.4]
+  const [storageMode, setStorageMode] = useState<'cloud' | 'local'>('local');
 
-  // ─ Load Projects from Database ───────────────────────────────────────────
+  // ─ Deletion Overlay States [1.2.4] ────────────────────────────────────────
+  const [pendingDeleteProject, setPendingDeleteProject] = useState<Project | null>(null);
+  const [deleteInput, setDeleteInput] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // ─ Load Projects ──────────────────────────────────────────────────────────
   const loadProjectsList = async () => {
     setIsLoading(true);
     setError(null);
     try {
       const response = await projectAPI.getProjects();
       if (response.success && response.data) {
-        // SAFEGUARD 1: Fallback to an empty array to prevent state from ever being undefined [1]
         setProjects(response.data.projects || []);
       } else {
         setError(response.error || 'Failed to load projects list.');
@@ -77,7 +83,7 @@ export default function Projects({ onNavigate, isAuthenticated, user, profile }:
     onNavigate('editor');
   };
 
-  // ─ Create Project API Trigger ─────────────────────────────────────────────
+  // ─ Create Project ─────────────────────────────────────────────────────────
   const handleCreate = async () => {
     if (!newName.trim()) return;
     setCreating(true);
@@ -90,7 +96,7 @@ export default function Projects({ onNavigate, isAuthenticated, user, profile }:
       if (response.success && response.data) {
         setShowNew(false);
         setNewName('');
-        setStorageMode('cloud');
+        setStorageMode('local'); // Reset to default
         
         localStorage.setItem('activeProjectId', response.data.id);
         onNavigate('editor');
@@ -99,6 +105,30 @@ export default function Projects({ onNavigate, isAuthenticated, user, profile }:
       }
     } catch (err) {
       setCreating(false);
+      setError('A connection error occurred.');
+    }
+  };
+
+  // ─ Execute Project Deletion [1.2.4] ────────────────────────────────────────
+  const handleFinalDelete = async () => {
+    if (!pendingDeleteProject || deleteInput !== pendingDeleteProject.name) return;
+    
+    setIsDeleting(true);
+    setError(null);
+
+    try {
+      const response = await projectAPI.deleteProject(pendingDeleteProject.id);
+      setIsDeleting(false);
+
+      if (response.success) {
+        setPendingDeleteProject(null);
+        setDeleteInput('');
+        loadProjectsList(); // Instantly reloads the active list [1.2.4]
+      } else {
+        setError(response.error || 'Failed to delete project.');
+      }
+    } catch (err) {
+      setIsDeleting(false);
       setError('A connection error occurred.');
     }
   };
@@ -126,12 +156,11 @@ export default function Projects({ onNavigate, isAuthenticated, user, profile }:
     );
   }
 
-  // Calculate credits locally
   const availableCredits = profile ? profile.credits - profile.reserved_credits : 0;
 
   // ─ SCREEN 2: Authenticated Projects Workspace ─────────────────────────────
   return (
-    <div className="w-full relative bg-neutral-950 text-white min-h-screen">
+    <div className="w-full relative bg-neutral-950 text-white min-h-screen select-none">
       <div className="absolute top-0 right-0 w-[600px] h-[500px] bg-[#00AAFF]/10 blur-[120px] rounded-full pointer-events-none" />
 
       <section className="relative pt-8 pb-24 px-6 max-w-7xl mx-auto">
@@ -207,16 +236,12 @@ export default function Projects({ onNavigate, isAuthenticated, user, profile }:
                   className="flex-1 w-full px-5 py-3 bg-black/60 border border-white/10 rounded-xl outline-none focus:ring-1 focus:ring-[#00AAFF]/50 focus:border-[#00AAFF] text-white placeholder:text-neutral-600 transition-all font-medium"
                 />
 
-                {/* Storage Mode Selector */}
-                <div className="flex bg-neutral-900 border border-white/10 p-1 rounded-xl w-full sm:w-auto">
+                {/* Storage Mode Selector (Cloud Sync Disabled temporarily) [1.2.4] */}
+                <div className="flex bg-neutral-900 border border-white/10 p-1 rounded-xl w-full sm:w-auto relative group">
                   <button
+                    disabled
                     type="button"
-                    onClick={() => setStorageMode('cloud')}
-                    className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                      storageMode === 'cloud'
-                        ? 'bg-[#00AAFF] text-neutral-950 shadow-md'
-                        : 'text-neutral-400 hover:text-white'
-                    }`}
+                    className="flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-xs font-bold text-neutral-600 cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
                     Cloud Sync
@@ -224,15 +249,16 @@ export default function Projects({ onNavigate, isAuthenticated, user, profile }:
                   <button
                     type="button"
                     onClick={() => setStorageMode('local')}
-                    className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                      storageMode === 'local'
-                        ? 'bg-red-500 text-white shadow-md'
-                        : 'text-neutral-400 hover:text-white'
-                    }`}
+                    className="flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 bg-red-500 text-white shadow-md"
                   >
                     <Shield className="w-3.5 h-3.5" />
-                    Local Privacy
+                    Local
                   </button>
+                  
+                  {/* Tooltip explaining cloud sync is coming soon [1.2.4] */}
+                  <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block bg-neutral-900 text-neutral-300 text-[10px] px-3 py-1.5 rounded-lg border border-white/10 shadow-xl whitespace-nowrap z-50">
+                    ☁ Hybrid Cloud Sync is coming soon! Local Privacy enabled [1.2.4].
+                  </div>
                 </div>
               </div>
 
@@ -328,18 +354,31 @@ export default function Projects({ onNavigate, isAuthenticated, user, profile }:
                     )}
                   </div>
 
-                  {/* Title & Storage Badge */}
+                  {/* Title, Storage Badge, and Hoverable Trash Delete Button [1.2.4] */}
                   <div className="flex items-center justify-between gap-3 mb-2">
                     <h3 className="font-bold text-white group-hover:text-[#00AAFF] transition-colors truncate text-lg">
                       {project.name}
                     </h3>
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-black tracking-widest uppercase border ${
-                      project.storage_mode === 'local'
-                        ? 'bg-red-500/10 border-red-500/25 text-red-400'
-                        : 'bg-green-500/10 border-green-500/25 text-green-400'
-                    }`}>
-                      {project.storage_mode}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {/* Delete project button (with stop propagation check) [1.2.4] */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevents workspace loading
+                          setPendingDeleteProject(project);
+                        }}
+                        className="p-1 hover:bg-red-500/10 rounded-md text-neutral-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                        title="Delete Project"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-black tracking-widest uppercase border ${
+                        project.storage_mode === 'local'
+                          ? 'bg-red-500/10 border-red-500/25 text-red-400'
+                          : 'bg-green-500/10 border-green-500/25 text-green-400'
+                      }`}>
+                        {project.storage_mode}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Metadata session logs */}
@@ -368,6 +407,89 @@ export default function Projects({ onNavigate, isAuthenticated, user, profile }:
           )}
         </motion.div>
       </section>
+
+      {/* ─── OVERLAY: Double-Confirm Delete Modal (Copy-Paste Friendly) [1.2.4] ─── */}
+      {pendingDeleteProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          {/* Added select-text to allow highlighting text inside the modal [1.2.4] */}
+          <div className="relative w-full max-w-md p-8 bg-[#0a0a0a] border border-white/10 rounded-3xl shadow-2xl space-y-6 overflow-hidden select-text">
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
+            
+            <div className="flex justify-between items-center pb-4 border-b border-white/10 select-none">
+              <h3 className="text-xl font-black text-white">Delete Project</h3>
+              <button 
+                onClick={() => { setPendingDeleteProject(null); setDeleteInput(''); }} 
+                className="text-neutral-500 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex justify-center select-none">
+                <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                  <AlertTriangle className="w-8 h-8 text-red-500" />
+                </div>
+              </div>
+
+              <div className="space-y-1.5 text-center">
+                <p className="text-neutral-300 text-sm font-semibold select-none">Are you absolutely sure?</p>
+                <p className="text-neutral-400 text-xs leading-relaxed select-none">
+                  This will permanently delete the project{' '}
+                  {/* Added select-text & cursor-text to allow highlighting the project name [1.2.4] */}
+                  <strong className="text-white select-text cursor-text">
+                    "{pendingDeleteProject.name}"
+                  </strong>
+                  , including all its associated assets, timeline frames, and rendering jobs. This action is irreversible.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-neutral-400 text-xs select-none">
+                  Please type the project name{' '}
+                  {/* Added select-text & cursor-text to allow highlighting the project name [1.2.4] */}
+                  <strong className="text-red-400 select-text cursor-text">
+                    {pendingDeleteProject.name}
+                  </strong>{' '}
+                  to confirm:
+                </p>
+                <input
+                  autoFocus
+                  type="text"
+                  value={deleteInput}
+                  onChange={(e) => setDeleteInput(e.target.value)}
+                  placeholder={pendingDeleteProject.name}
+                  className="w-full px-5 py-3 bg-black/40 border border-white/10 rounded-xl text-white outline-none focus:ring-1 focus:ring-red-500/50 focus:border-red-500 transition-all font-semibold text-center"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-4 border-t border-white/5 select-none">
+              <button
+                onClick={() => { setPendingDeleteProject(null); setDeleteInput(''); }}
+                className="flex-1 py-3 bg-white/5 border border-white/10 text-white rounded-xl font-bold text-sm hover:bg-white/10 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleFinalDelete}
+                disabled={deleteInput !== pendingDeleteProject.name || isDeleting}
+                className="flex-1 py-3 bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-bold text-sm hover:bg-red-600 transition-all flex items-center justify-center gap-2"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete Project'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
