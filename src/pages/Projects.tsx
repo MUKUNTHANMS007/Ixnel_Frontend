@@ -2,54 +2,105 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { FolderOpen, Plus, Clock, Box, Loader2, LogIn, Sparkles } from 'lucide-react';
-import { useProjectStore } from '../store/projectStore';
+import { 
+  FolderOpen, 
+  Plus, 
+  Clock, 
+  Box, 
+  Loader2, 
+  LogIn, 
+  Sparkles, 
+  Shield, 
+  Building2, 
+  User,
+  Calendar
+} from 'lucide-react';
 import { useEditorStore } from '../store/editorStore';
 
-// Imported Types from api.ts
-import type { User, UserProfile } from '../lib/api';
+// Type-safe imports for API and structural schemas [1.1.9, 1.3.1]
+import { projectAPI } from '../lib/project_api';
+import type { Project } from '../lib/project_api';
+import type { User as UserType, UserProfile } from '../lib/api';
 
 interface ProjectsPageProps {
   onNavigate: (page: string) => void;
   isAuthenticated: boolean;
-  user: User | null;
+  user: UserType | null;
   profile: UserProfile | null;
 }
 
 export default function Projects({ onNavigate, isAuthenticated, user, profile }: ProjectsPageProps) {
-  const { projects, listProjects, loadProject, createProject } = useProjectStore();
+  // ─ Local React State (No store dependencies) ──────────────────────────────
+  const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [showNew, setShowNew] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Default new projects to 'cloud' storage, matching your database standard [1.2.4]
+  const [storageMode, setStorageMode] = useState<'cloud' | 'local'>('cloud');
+
+  // ─ Load Projects from Database ───────────────────────────────────────────
+  const loadProjectsList = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await projectAPI.getProjects();
+      if (response.success && response.data) {
+        // SAFEGUARD 1: Fallback to an empty array to prevent state from ever being undefined [1]
+        setProjects(response.data.projects || []);
+      } else {
+        setError(response.error || 'Failed to load projects list.');
+      }
+    } catch (err) {
+      console.error('[Projects] Error fetching projects:', err);
+      setError('A connection error occurred while loading projects.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (isAuthenticated) {
-      setIsLoading(true);
-      listProjects().finally(() => setIsLoading(false));
+      loadProjectsList();
     }
-  }, [isAuthenticated, listProjects]);
+  }, [isAuthenticated]);
 
-  const handleLoadProject = (project: (typeof projects)[number]) => {
-    // Clear existing editor state first
+  // ─ Open Active Workspace ──────────────────────────────────────────────────
+  const handleLoadProject = (project: Project) => {
     const editorState = useEditorStore.getState();
     const existingIds = editorState.keyframes.map(kf => kf.id);
     existingIds.forEach(id => editorState.removeKeyframe(id));
 
-    loadProject(project);
+    localStorage.setItem('activeProjectId', project.id);
     onNavigate('editor');
   };
 
+  // ─ Create Project API Trigger ─────────────────────────────────────────────
   const handleCreate = async () => {
     if (!newName.trim()) return;
     setCreating(true);
-    const success = await createProject(newName.trim());
-    if (success) {
-      setShowNew(false);
-      setNewName('');
-      onNavigate('editor');
+    setError(null);
+
+    try {
+      const response = await projectAPI.createProject(newName.trim(), storageMode);
+      setCreating(false);
+
+      if (response.success && response.data) {
+        setShowNew(false);
+        setNewName('');
+        setStorageMode('cloud');
+        
+        localStorage.setItem('activeProjectId', response.data.id);
+        onNavigate('editor');
+      } else {
+        setError(response.error || 'Failed to create project.');
+      }
+    } catch (err) {
+      setCreating(false);
+      setError('A connection error occurred.');
     }
-    setCreating(false);
   };
 
   // ─ SCREEN 1: Guest/Unauthenticated State ─────────────────────────────────
@@ -141,36 +192,81 @@ export default function Projects({ onNavigate, isAuthenticated, user, profile }:
             <motion.div
               initial={{ opacity: 0, scale: 0.97, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              className="mb-10 p-6 border border-white/10 bg-black/40 backdrop-blur-xl rounded-2xl flex flex-col sm:flex-row items-center gap-4 shadow-2xl shadow-black"
+              className="mb-10 p-6 border border-white/10 bg-black/40 backdrop-blur-xl rounded-2xl flex flex-col gap-6 shadow-2xl shadow-black relative"
             >
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00AAFF]/50 to-transparent" />
 
-              <input
-                autoFocus
-                type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                placeholder="Scene name..."
-                className="flex-1 w-full px-5 py-3 bg-black/60 border border-white/10 rounded-xl outline-none focus:ring-1 focus:ring-[#00AAFF]/50 focus:border-[#00AAFF] text-white placeholder:text-neutral-600 transition-all font-medium"
-              />
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <button
-                  onClick={handleCreate}
-                  disabled={creating || !newName.trim()}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-[#00AAFF] text-neutral-950 rounded-xl font-bold hover:bg-white transition-all disabled:opacity-50 disabled:hover:bg-[#00AAFF]"
-                >
-                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  Create
-                </button>
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <input
+                  autoFocus
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                  placeholder="Scene name..."
+                  className="flex-1 w-full px-5 py-3 bg-black/60 border border-white/10 rounded-xl outline-none focus:ring-1 focus:ring-[#00AAFF]/50 focus:border-[#00AAFF] text-white placeholder:text-neutral-600 transition-all font-medium"
+                />
+
+                {/* Storage Mode Selector */}
+                <div className="flex bg-neutral-900 border border-white/10 p-1 rounded-xl w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setStorageMode('cloud')}
+                    className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                      storageMode === 'cloud'
+                        ? 'bg-[#00AAFF] text-neutral-950 shadow-md'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Cloud Sync
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStorageMode('local')}
+                    className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                      storageMode === 'local'
+                        ? 'bg-red-500 text-white shadow-md'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <Shield className="w-3.5 h-3.5" />
+                    Local Privacy
+                  </button>
+                </div>
+              </div>
+
+              <p className="text-xs text-neutral-500 font-medium -mt-2">
+                {storageMode === 'cloud' 
+                  ? '✓ Cloud Sync: Assets are securely synced to your cloud account, letting you continue your workspace on any device.' 
+                  : '⚠ Local Privacy: Assets remain strictly in browser RAM. Zero server-side uploads or storage overhead. Refreshing will clear local frames.'}
+              </p>
+
+              <div className="flex items-center justify-end gap-3 w-full border-t border-white/5 pt-4">
                 <button
                   onClick={() => setShowNew(false)}
                   className="px-5 py-3 text-neutral-400 hover:text-white hover:bg-white/5 rounded-xl transition-all font-medium"
                 >
                   Cancel
                 </button>
+                <button
+                  onClick={handleCreate}
+                  disabled={creating || !newName.trim()}
+                  className="flex items-center justify-center gap-2 px-6 py-3 bg-[#00AAFF] text-neutral-950 rounded-xl font-bold hover:bg-white transition-all disabled:opacity-50 disabled:hover:bg-[#00AAFF]"
+                >
+                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Create Project
+                </button>
               </div>
             </motion.div>
+          )}
+
+          {/* Error Banner */}
+          {error && (
+            <div className="mb-8 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex gap-3 items-center font-medium animate-in fade-in">
+              <span className="text-lg">⚠</span>
+              <span>{error}</span>
+            </div>
           )}
 
           {/* Loading */}
@@ -181,14 +277,14 @@ export default function Projects({ onNavigate, isAuthenticated, user, profile }:
           )}
 
           {/* Empty State */}
-          {!isLoading && projects.length === 0 && (
+          {!isLoading && (!projects || projects.length === 0) && (
             <div className="flex flex-col items-center justify-center py-24 gap-5 text-center bg-white/[0.01] border border-white/5 rounded-[32px] border-dashed">
               <div className="w-20 h-20 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center">
                 <Box className="w-10 h-10 text-[#00AAFF]/50" />
               </div>
               <div>
                 <h3 className="text-xl font-bold text-white mb-2">No projects yet</h3>
-                <p className="text-sm text-neutral-400">Create your first 3D scene to get started.</p>
+                <p className="text-sm text-neutral-400">Create your first animation workspace to get started.</p>
               </div>
               <button
                 onClick={() => setShowNew(true)}
@@ -200,11 +296,11 @@ export default function Projects({ onNavigate, isAuthenticated, user, profile }:
           )}
 
           {/* Project Grid */}
-          {!isLoading && projects.length > 0 && (
+          {!isLoading && projects && projects.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {projects.map((project, i) => (
                 <motion.div
-                  key={project._id}
+                  key={project.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
@@ -212,36 +308,58 @@ export default function Projects({ onNavigate, isAuthenticated, user, profile }:
                   onClick={() => handleLoadProject(project)}
                   className="group p-5 bg-white/[0.02] border border-white/5 rounded-[24px] cursor-pointer hover:border-[#00AAFF]/30 hover:bg-white/[0.04] hover:shadow-2xl hover:shadow-[#00AAFF]/10 transition-all duration-300 relative overflow-hidden"
                 >
-                  {/* Subtle top glow on hover */}
                   <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00AAFF]/0 to-transparent group-hover:via-[#00AAFF]/50 transition-all duration-500" />
 
                   {/* Preview thumbnail */}
                   <div className="w-full h-36 mb-5 rounded-xl bg-gradient-to-br from-black/60 to-black/20 border border-white/5 flex items-center justify-center overflow-hidden relative">
                     <div className="absolute inset-0 bg-[#00AAFF]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                    <div className="grid grid-cols-3 gap-2 opacity-20 group-hover:opacity-40 transition-opacity">
-                      {[...Array(9)].map((_, j) => (
-                        <div key={j} className="w-6 h-6 rounded-md bg-[#00AAFF]" style={{ opacity: Math.random() * 0.8 + 0.2 }} />
-                      ))}
-                    </div>
+                    
+                    {project.storage_mode === 'local' ? (
+                      <div className="text-center p-4">
+                        <Shield className="w-8 h-8 text-neutral-600 mx-auto mb-2" />
+                        <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">Privacy Mode</span>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2 opacity-20 group-hover:opacity-40 transition-opacity">
+                        {[...Array(9)].map((_, j) => (
+                          <div key={j} className="w-6 h-6 rounded-md bg-[#00AAFF]" style={{ opacity: Math.random() * 0.8 + 0.2 }} />
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  <h3 className="font-bold text-white mb-2 group-hover:text-[#00AAFF] transition-colors truncate text-lg">
-                    {project.name}
-                  </h3>
+                  {/* Title & Storage Badge */}
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <h3 className="font-bold text-white group-hover:text-[#00AAFF] transition-colors truncate text-lg">
+                      {project.name}
+                    </h3>
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-black tracking-widest uppercase border ${
+                      project.storage_mode === 'local'
+                        ? 'bg-red-500/10 border-red-500/25 text-red-400'
+                        : 'bg-green-500/10 border-green-500/25 text-green-400'
+                    }`}>
+                      {project.storage_mode}
+                    </span>
+                  </div>
 
-                  <div className="flex items-center gap-2 text-xs font-medium text-neutral-500 uppercase tracking-widest">
-                    <Clock className="w-3.5 h-3.5 text-[#00AAFF]" />
-                    {new Date(project.updatedAt).toLocaleDateString('en-US', {
-                      month: 'short', day: 'numeric', year: 'numeric'
-                    })}
+                  {/* Metadata session logs */}
+                  <div className="space-y-1.5 pt-2 border-t border-white/5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-[#00AAFF]" />
+                      <span>Last edited: {new Date(project.updated_at).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-neutral-600" />
+                      <span>Created: {new Date(project.created_at).toLocaleDateString()}</span>
+                    </div>
                   </div>
 
                   <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
                     <span className="text-xs font-bold text-neutral-600">
-                      {((project.sceneData as { keyframes?: unknown[] })?.keyframes?.length ?? 0)} OBJECTS
+                      {project.storage_mode === 'local' ? 'LOCAL WORKSPACE' : 'CLOUD WORKSPACE'}
                     </span>
                     <span className="text-xs font-black text-[#00AAFF] opacity-0 translate-x-[-10px] group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 flex items-center gap-1">
-                      OPEN SCENE <Sparkles className="w-3 h-3" />
+                      OPEN WORKSPACE <Sparkles className="w-3.5 h-3.5" />
                     </span>
                   </div>
                 </motion.div>

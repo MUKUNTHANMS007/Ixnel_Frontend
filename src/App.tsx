@@ -165,7 +165,7 @@ export default function App() {
       case 'projects':       
         return <Projects onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated} user={user} profile={profile} />;
       case 'pricing':        return <PricingPage onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated}  subscription={subscription} onAuthSuccess={restoreSession}/>;
-      case 'editor':         return <Editor onNavigate={navigateAndPersist} />;
+      case 'editor':         return <Editor onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated} user={user} profile={profile} onAuthSuccess={restoreSession} />;
       case 'feedback':       return <FeedbackPage />;
       case 'signin':         
         return <SignIn onNavigate={navigateAndPersist} onAuthSuccess={restoreSession} />;
