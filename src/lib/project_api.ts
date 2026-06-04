@@ -124,5 +124,16 @@ export const projectAPI = {
       method: 'PATCH', // Aligned to your exact PATCH route
       token,
     });
+  },
+
+  /**
+   * Securely requests the backend to delete a project and cascade-wipe all its assets [1.2.4].
+   */
+  deleteProject: async (id: string): Promise<ApiResponse<void>> => {
+    const token = localStorage.getItem('accessToken');
+    return api<void>(`/projects/${id}`, {
+      method: 'DELETE',
+      token,
+    });
   }
 };
