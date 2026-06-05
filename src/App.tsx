@@ -156,7 +156,7 @@ export default function App() {
   // ─ Render page contents with props ───────────────────────────────────────
   const renderContent = () => {
     switch (activePage) {
-      case 'home':           return <Home onNavigate={navigateAndPersist} />;
+      case 'home':           return <Home onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated} />;
       case 'docs':           return <Docs />;
       case 'news':           return <News />;
       case 'products':       
@@ -175,7 +175,7 @@ export default function App() {
       case 'profile':        
         return <ProfilePage onNavigate={navigateAndPersist} user={user} profile={profile} subscription={subscription} onLogout={handleLogout} payments={payments}/>;
       case 'oauth-callback': return <OAuthCallback onNavigate={navigateAndPersist} />;
-      default:               return <Home onNavigate={navigateAndPersist} />;
+      default:               return <Home onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated} />;
     }
   };
 

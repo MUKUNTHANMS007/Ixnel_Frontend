@@ -1,4 +1,5 @@
-import { useAuthStore } from '../store/authStore';
+// pages/Home.tsx
+
 import { motion } from 'framer-motion';
 import { 
   Wand2, 
@@ -6,15 +7,17 @@ import {
   Settings, 
   CheckCircle2, 
   ArrowRight, 
-  Play, 
   Sparkles,
   Palette,
   Wind
 } from 'lucide-react';
 
-const Home = ({ onNavigate }: { onNavigate?: (page: string) => void }) => {
-  const { isAuthenticated } = useAuthStore();
+interface HomeProps {
+  onNavigate?: (page: string) => void;
+  isAuthenticated: boolean; // Added prop type
+}
 
+const Home = ({ onNavigate, isAuthenticated }: HomeProps) => {
   return (
     <div className="w-full bg-neutral-950 text-white min-h-screen font-sans selection:bg-[#00AAFF]/30">
       

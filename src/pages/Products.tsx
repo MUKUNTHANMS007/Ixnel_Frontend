@@ -5,12 +5,12 @@ import { Palette, Layers, Wind, ArrowRight, Puzzle, FileText } from 'lucide-reac
 
 interface ProductsProps {
   onNavigate?: (page: string) => void;
-  isAuthenticated: boolean; // Added
+  isAuthenticated: boolean;
 }
 
 export default function ProductsPage({ onNavigate, isAuthenticated }: ProductsProps) {
   return (
-    <div className="w-full bg-neutral-950 min-h-screen pt-12 pb-24 px-6 relative overflow-hidden">
+    <div className="w-full bg-neutral-950 min-h-screen pt-12 pb-24 px-6 relative overflow-hidden select-none">
       {/* Background Glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-[#00AAFF]/10 blur-[150px] rounded-full pointer-events-none" />
 
@@ -46,8 +46,13 @@ export default function ProductsPage({ onNavigate, isAuthenticated }: ProductsPr
             
             <button 
               onClick={() => {
-                if (!isAuthenticated) onNavigate?.('signin');
-                else onNavigate?.('pipeline');
+                if (!isAuthenticated) {
+                  onNavigate?.('signin');
+                } else {
+                  // Set active trigger and redirect directly to project dashboard [1.2.4]
+                  localStorage.setItem('triggerNewProjectModal', 'true');
+                  onNavigate?.('projects');
+                }
               }}
               className="w-full py-4 bg-[#00AAFF] text-neutral-950 rounded-xl font-bold text-sm tracking-wide hover:bg-white transition-all shadow-lg shadow-[#00AAFF]/25 hover:shadow-white/10 flex items-center justify-center gap-2 group/btn"
             >
