@@ -11,8 +11,6 @@ import {
   LogIn, 
   Sparkles, 
   Shield, 
-  Building2, 
-  User,
   Calendar,
   Trash2,
   X,
@@ -70,6 +68,10 @@ export default function Projects({ onNavigate, isAuthenticated, user, profile }:
   useEffect(() => {
     if (isAuthenticated) {
       loadProjectsList();
+       if (localStorage.getItem('triggerNewProjectModal') === 'true') {
+        localStorage.removeItem('triggerNewProjectModal'); // Clear trigger [1.2.4]
+        setShowNew(true); // Open the creation modal immediately [1.2.4]
+      }
     }
   }, [isAuthenticated]);
 
