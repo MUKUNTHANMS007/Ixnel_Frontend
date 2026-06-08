@@ -99,7 +99,7 @@ export default function ProfilePage({ onNavigate, user, profile, subscription, p
   const activePlanCode = hasActiveSub ? subscription.plan_code : 'free';
   const planDetails = PLAN_TIER_DETAILS[activePlanCode] || PLAN_TIER_DETAILS.free;
 
-  const totalBalance = profile.credits;
+  const totalBalance = (profile as any).current_credit_balance ?? (profile as any).credits ?? 0;
   const subscriptionBalance = profile.subscription_credits;
   const purchasedBalance = profile.purchased_credits;
   const reservedCredits = profile.reserved_credits;

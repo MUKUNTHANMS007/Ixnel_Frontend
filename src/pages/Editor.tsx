@@ -135,10 +135,19 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSuccessModalShown, setIsSuccessModalShown] = useState(false);
 
+  // Add state to track real-time AI processing phase
+  const [aiJobStatus, setAiJobStatus] = useState<
+    'queued' | 'initiated' | 'processing' | 'completed' | 'failed' | null
+  >(null);
+
+  // Track if a finished job is available for download on startup
+  const [lastCompletedBatch, setLastCompletedBatch] = useState<any[]>([]);
+
   // File Input References & Container Refs
   const referenceInputRef = useRef<HTMLInputElement>(null);
   const lineartInputRef = useRef<HTMLInputElement>(null);
   const lineartGridContainerRef = useRef<HTMLDivElement>(null); // For drag box boundaries [1.2.4]
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Total frames currently loaded [1.2.4]
   const totalFrames = activeProject?.storage_mode === 'local'
@@ -172,6 +181,47 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
           setLocalLinearts(lines);
 
           if (refs.length > 0) setSelectedReferenceId(refs[0].id);
+
+          // ⚠️ WORKSPACE RECOVERY: Check for running background jobs on startup [1.2.4]
+          try {
+            const jobsResponse = await projectAPI.getMyJobs();
+            if (jobsResponse.success && jobsResponse.data && jobsResponse.data.jobs) {
+              const jobsList = jobsResponse.data.jobs;
+              
+              // 1. Search for any actively processing job first
+              const activeJob = jobsList.find(
+                (job) => ['queued', 'initiated', 'processing'].includes(job.status)
+              );
+
+              if (activeJob) {
+                console.log(`[Editor] Recovery found active job running: ${activeJob.id}. Resuming tracker.`);
+                setIsProcessingAI(true);
+                setAiJobStatus(activeJob.status as any);
+                
+                // If the job belongs to a batch, collect all other batch siblings
+                const batchJobIds = activeJob.batchJobIds || [activeJob.id];
+                startStatusPolling(batchJobIds); // Re-establish background polling loop!
+              } else {
+                // 2. If no active job, check if the most recent job completed successfully
+                const latestJob = jobsList[0]; // most recent sorted by created_at DESC
+                if (latestJob && latestJob.status === 'completed' && latestJob.output_path) {
+                  
+                  // Group all completed sibling segments created in the same batch cycle (within 10 seconds of each other)
+                  const siblingJobs = jobsList.filter(
+                    (job) => 
+                      job.status === 'completed' && 
+                      job.output_path &&
+                      Math.abs(new Date(job.created_at).getTime() - new Date(latestJob.created_at).getTime()) < 10000
+                  );
+                  
+                  setLastCompletedBatch(siblingJobs); // Save complete batch for download cards
+                }
+              }
+            }
+          } catch (recoveryErr) {
+            console.warn('[Editor] Recovery job check skipped/failed:', recoveryErr);
+          }
+
         } else if (project.assets) {
           setCloudAssets(project.assets);
         }
@@ -211,6 +261,121 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
       if (intervalId) clearInterval(intervalId);
     };
   }, [isPlaying, frameDensity, totalFrames]);
+
+  // Inside Editor.tsx lifecycle section:
+  useEffect(() => {
+    return () => {
+      // Clean up and kill any active polling timers when unmounting the Editor page
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Helper to trigger the download of completed zip packages manually [1.2.4]
+  const triggerZipDownload = (outputPath: string, suffix: string = '') => {
+    const apiBaseUrl = import.meta.env.VITE_API_URL 
+      ? import.meta.env.VITE_API_URL.replace('/api', '') 
+      : 'http://localhost:5000';
+
+    const link = document.createElement('a');
+    link.href = `${apiBaseUrl}${outputPath}`;
+    
+    // Append segment identifier if downloading a batch
+    const fileName = suffix 
+      ? `${activeProject?.name || 'project'}_colorized_segment_${suffix}.zip`
+      : `${activeProject?.name || 'project'}_colorized.zip`;
+
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Staggers multiple downloads with an 800ms offset to bypass browser popup blockers [1.2.4]
+  const triggerBatchDownload = () => {
+    lastCompletedBatch.forEach((job, index) => {
+      if (job.output_path) {
+        setTimeout(() => {
+          triggerZipDownload(job.output_path, `${index + 1}`);
+        }, index * 800);
+      }
+    });
+  };
+
+  // 3. Status Polling Loop Helper (Shared by Submission & Recovery mounts) [1.2.4]
+  const startStatusPolling = (jobIds: string[]) => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+    }
+
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        // Poll status of all batch jobs in parallel
+        const responses = await Promise.all(jobIds.map(id => projectAPI.getJobStatus(id)));
+        
+        const statusList = responses.map(res => (res.data?.status as 'queued' | 'processing' | 'completed' | 'failed' | 'blocked' | 'cancelled' | 'initiated') || 'queued');
+        const errorsList = responses.map(res => res.data?.error_message).filter(Boolean);
+        const outputsList = responses
+          .map(res => res.data?.output_path)
+          .filter((path): path is string => path != null);
+
+        // Map collective AI status
+        if (statusList.some(s => s === 'processing')) {
+          setAiJobStatus('processing');
+        } else if (statusList.some(s => s === 'initiated')) {
+          setAiJobStatus('initiated');
+        } else {
+          setAiJobStatus('queued');
+        }
+
+        // Check if ALL jobs are completed
+        const allCompleted = statusList.every(s => s === 'completed');
+        const anyFailed = statusList.some(s => s === 'failed');
+
+        if (allCompleted) {
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          setIsProcessingAI(false);
+          setAiJobStatus(null);
+          setIsSuccessModalShown(true);
+          onAuthSuccess(); // Refresh credits indicators
+
+          // Trigger download of ALL successfully compiled archives in the batch
+          outputsList.forEach((output_path) => {
+            triggerZipDownload(output_path);
+          });
+
+        } else if (anyFailed) {
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          setIsProcessingAI(false);
+          setAiJobStatus(null);
+          setError(errorsList[0] || 'One or more split rendering segments failed.');
+          onAuthSuccess(); 
+        }
+      } catch (pollError) {
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        setIsProcessingAI(false);
+        setAiJobStatus(null);
+        setError('Connection lost while monitoring batch status.');
+      }
+    }, 7000); // Polling interval set to 7 seconds to avoid rate limiting
+  };
+
+  // ⚠️ Prevent accidental tab closure, page reloads, or navigation during active AI execution [1.2.4]
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isProcessingAI) {
+        const msg = 'AI colorization is actively running in the background. Leaving now will interrupt your automatic download.';
+        e.preventDefault();
+        e.returnValue = msg;
+        return msg;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isProcessingAI]);
 
   const handleResetPlayer = () => {
     setIsPlaying(false);
@@ -436,17 +601,28 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
     }
   };
 
-  // ─ Job Cost & Calculation ─────────────────────────────────────────────────
+  // ─ Job Cost & Calculation (Synced to Backend Sliding-Window Partitioning) ────
   const getJobCost = () => {
-    // 1 Credit per frame
-    return Math.max(totalFrames * 1, 1);
+    const N = totalFrames;
+    if (N <= 24) return Math.max(N, 1);
+    
+    // Calculate chunks count K using the exact same backend algorithm [1.2.4]
+    let chunksCount = 0;
+    let start = 0;
+    while (start + 24 <= N) {
+      chunksCount++;
+      start += 24;
+    }
+    if (start < N) {
+      chunksCount++; // Final overlapping segment
+    }
+    return chunksCount * 24; // Each 24-frame job segment costs exactly 24 credits
   };
 
   // ─ Submit AI Job ─────────────────────────────────────────────────────────
   const handleAISubmit = () => {
     setError(null);
     
-    // Validation: Colorization requires a colored reference image
     const hasReference = activeProject?.storage_mode === 'local'
       ? selectedReferenceId !== null
       : cloudAssets.some(a => a.asset_type === 'reference');
@@ -456,7 +632,18 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
       return;
     }
 
-    setShowConfirmModal(true); // Open transaction confirmation overlay
+    // High FPS warning verification
+    if (frameDensity > 24) {
+      const confirmHighFps = window.confirm(
+        `You have selected ${frameDensity} FPS. Semantic colorization works best at 24 FPS. Higher framerates may result in minor temporal stuttering. Do you wish to continue at ${frameDensity} FPS?`
+      );
+      if (!confirmHighFps) {
+        setFrameDensity(24); // Optimize back to 24
+        return;
+      }
+    }
+
+    setShowConfirmModal(true); 
   };
 
   const availableCredits = profile ? profile.credits - profile.reserved_credits : 0;
@@ -467,33 +654,52 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
     setIsProcessingAI(true);
     setError(null);
 
-    const cost = getJobCost();
+    const cost = getJobCost(); // Calculated using 24-frame chunks [1.2.4]
 
     try {
-      // Submit job directly to the backend
-      const response = await projectAPI.submitJob(
-        activeProject.id,
-        activeProject.storage_mode === 'local' ? 'Local RAM Buffer' : 'Cloud Bucket Path',
-        cost,
-        'ixnel-colorizer-v2'
-      );
+      // 1. Prepare FormData payload to handle binary files
+      const formData = new FormData();
+      formData.append('projectId', activeProject.id);
+      formData.append('jobCost', '24'); // Cost per individual 24-frame chunk [1.2.4]
+      formData.append('modelVersion', 'ixnel-colorizer-v2');
+
+      if (activeProject.storage_mode === 'local') {
+        // Retrieve the active reference File object
+        const activeRefObj = localReferences.find(r => r.id === selectedReferenceId);
+        if (activeRefObj) {
+          formData.append('reference', activeRefObj.file);
+        }
+
+        // Retrieve and append all line_art File objects
+        localLinearts.forEach((lineart) => {
+          formData.append('frames', lineart.file);
+        });
+      } else {
+        // Cloud mode: pass existing bucket identifier paths instead of uploading raw files
+        formData.append('inputPath', 'Cloud Bucket Path');
+      }
+
+      // 2. Submit FormData payload to your backend
+      const response = await projectAPI.submitJob(formData);
 
       if (response.success && response.data) {
-        onAuthSuccess(); // Immediately sync and update credit indicators
-
-        // Mocking AI render and automated output ZIP download
-        setTimeout(() => {
+        // Retrieve both the primary job ID and the full batch list
+        const jobId = response.data.id;
+        const batchJobIds = response.data.batchJobIds || [jobId];
+        
+        if (!jobId) {
+          console.error('[Editor] Error: Queued job ID is undefined. Aborting status polling.');
           setIsProcessingAI(false);
-          setIsSuccessModalShown(true);
+          setError('Job successfully queued, but failed to retrieve tracking identifier.');
+          return;
+        }
 
-          // Simulated browser ZIP download
-          const link = document.createElement('a');
-          link.href = '#';
-          link.setAttribute('download', `${activeProject.name}_colorized.zip`);
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }, 3000);
+        onAuthSuccess(); // Update credit indicators immediately
+        setAiJobStatus('queued'); // Initial State
+
+        // Trigger the shared batch polling tracker
+        startStatusPolling(batchJobIds);
+
       } else {
         setIsProcessingAI(false);
         setError(response.error || 'Inference submission failed.');
@@ -507,6 +713,20 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
   const activeReferenceImage = activeProject?.storage_mode === 'local'
     ? localReferences.find(r => r.id === selectedReferenceId)?.url
     : cloudAssets.find(a => a.asset_type === 'reference')?.file_url;
+
+  // Calculates details of current batch layout for explicit user warning [1.2.4]
+  const getBatchSplitCount = () => {
+    const N = totalFrames;
+    if (N <= 24) return 1;
+    let count = 0;
+    let start = 0;
+    while (start + 24 <= N) {
+      count++;
+      start += 24;
+    }
+    if (start < N) count++;
+    return count;
+  };
 
   return (
     <div className="fixed inset-0 w-screen h-screen bg-neutral-950 text-white overflow-hidden select-none flex flex-col pt-16 z-50 animate-in fade-in duration-300">
@@ -533,8 +753,13 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
       <div className="h-16 bg-neutral-900 border-b border-white/5 flex items-center justify-between px-6 z-40 shadow-md">
         <div className="flex items-center gap-4">
           <button 
-            onClick={() => onNavigate('projects')}
-            className="p-2 hover:bg-white/5 rounded-xl text-neutral-400 hover:text-white transition-colors flex items-center gap-1.5"
+            onClick={() => !isProcessingAI && onNavigate('projects')}
+            disabled={isProcessingAI}
+            className={`p-2 rounded-xl text-neutral-400 hover:text-white transition-colors flex items-center gap-1.5 ${
+              isProcessingAI 
+                ? 'opacity-40 cursor-not-allowed pointer-events-none' 
+                : 'hover:bg-white/5'
+            }`}
           >
             <ChevronLeft className="w-4 h-4" />
             Workspace
@@ -886,6 +1111,40 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
               AI Processing Tools
             </div>
 
+            {/* ⚠️ ADD THIS ERROR BANNER HERE TO SHOW COMPILER/BALANCES ERRORS */}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-xs flex items-start justify-between gap-2 animate-in fade-in zoom-in-95 duration-200">
+                <span className="font-semibold leading-relaxed">{error}</span>
+                <button 
+                  onClick={() => setError(null)} 
+                  className="text-neutral-400 hover:text-white transition-colors text-xs font-bold pt-0.5"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* ⚠️ ADD THIS RECOVERY DOWNLOAD CARD FOR BACKGROUND COMPLETIONS */}
+            {lastCompletedBatch.length > 0 && (
+              <div className="bg-green-500/10 border border-green-500/25 text-green-400 p-4 rounded-2xl text-xs space-y-2.5 animate-in fade-in zoom-in-95 duration-200">
+                <div className="font-bold flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-green-400" />
+                  Latest Render Complete! 🎉
+                </div>
+                <p className="text-neutral-400 leading-relaxed font-semibold">
+                  Your sequence was successfully colorized in{' '}
+                  <strong>{lastCompletedBatch.length} parallel segments</strong> while you were away.
+                </p>
+                <button
+                  type="button"
+                  onClick={triggerBatchDownload}
+                  className="w-full py-2.5 bg-green-500 text-neutral-950 hover:bg-white hover:text-neutral-950 font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md shadow-green-500/10"
+                >
+                  Download {lastCompletedBatch.length} Colorized ZIPs
+                </button>
+              </div>
+            )}
+
             {/* TOOL SELECTOR */}
             <div className="space-y-2">
               <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Select AI Model</span>
@@ -956,6 +1215,7 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
               </div>
 
               {/* Slider 2 */}
+              {/* Slider 2 */}
               <div className="space-y-1.5">
                 <div className="flex justify-between text-xs font-bold text-neutral-400">
                   <span>Prompt Strength</span>
@@ -967,6 +1227,11 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
                   className="w-full accent-[#00AAFF]" 
                 />
               </div>
+
+              {/* Informational Captions */}
+              <p className="text-[9px] text-neutral-500 leading-relaxed font-semibold pt-2 border-t border-white/5">
+                ℹ️ Frames are temporarily scaled to 512x320 for efficient AI GPU processing and automatically restored back to their original size upon final compile.
+              </p>
             </div>
           </div>
 
@@ -976,7 +1241,7 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
             <div className="p-4 bg-black/40 border border-white/5 rounded-2xl text-center space-y-1">
               <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest block">Estimated Cost</span>
               <span className="text-2xl font-black text-white">{getJobCost()} Credits</span>
-              <span className="text-[10px] text-neutral-500 block">1 credit per frame sequence [1.2.4]</span>
+              <span className="text-[10px] text-neutral-500 block">1 credit per frame sequence</span>
             </div>
 
             {/* DYNAMIC ACTION SUBMIT BUTTON (Colorize vs. Create) */}
@@ -1006,12 +1271,29 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
 
             <div className="space-y-2">
               <h3 className="text-2xl font-black text-white tracking-tight">Confirm AI Render</h3>
+              
+              {/* Custom Batch warning logic inside confirmation modal */}
               <p className="text-neutral-400 text-sm leading-relaxed">
-                This operation will process your uploaded line-art sequence using our semantic colorization model [1.2.4]. This transaction is irreversible [1.2.4].
+                This operation will process your uploaded line-art sequence using our semantic colorization model. 
+                {totalFrames > 24 ? (
+                  <span className="block mt-2 text-yellow-500 font-semibold bg-yellow-500/10 border border-yellow-500/25 p-3 rounded-xl">
+                    ⚠️ Your {totalFrames}-frame sequence will be automatically split into{' '}
+                    <strong>{getBatchSplitCount()} overlapping segments</strong> to maintain color & temporal consistency. 
+                    This will run as {getBatchSplitCount()} parallel jobs. This transaction is irreversible.
+                  </span>
+                ) : (
+                  " This transaction is irreversible."
+                )}
               </p>
+
               <div className="p-4 bg-black/40 border border-white/5 rounded-xl w-full">
-                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">Deduction amount</p>
+                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">Total Batch Cost</p>
                 <p className="text-2xl font-black text-[#00AAFF]">{getJobCost()} Credits</p>
+                {totalFrames > 24 && (
+                  <p className="text-[9px] text-neutral-500 mt-1">
+                    ({getBatchSplitCount()} segments × 24 credits per chunk)
+                  </p>
+                )}
               </div>
               <p className="text-neutral-300 text-sm font-semibold pt-2">Do you wish to continue?</p>
             </div>
@@ -1037,16 +1319,47 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
       {/* ─── OVERLAY: Render Progress & Success Message ─── */}
       {isProcessingAI && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#0a0a0a] border border-white/10 px-8 py-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4 text-center max-w-sm">
+          <div className="bg-[#0a0a0a] border border-white/10 px-8 py-6 rounded-3xl shadow-2xl flex flex-col items-center gap-5 text-center max-w-sm">
+            
             <div className="relative">
-              {/* Native CSS Spinner (replaces Loader2 dependency cleanly) */}
+              {/* Native CSS Spinner */}
               <div className="w-12 h-12 rounded-full border-4 border-[#00AAFF]/20 border-t-[#00AAFF] animate-spin" />
-              <Sparkles className="w-5 h-5 text-[#00AAFF] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-50" />
+              <Sparkles className="w-5 h-5 text-[#00AAFF] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-50 animate-pulse" />
             </div>
-            <div>
-              <h3 className="text-lg font-bold text-white mb-1">Ixnel AI Engine</h3>
-              <p className="text-sm text-neutral-400 font-medium">Colorizing sequence... mapping reference sheet...</p>
+
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-bold text-white tracking-tight">Ixnel AI Engine</h3>
+              
+              {/* Dynamic Status Translator */}
+              {aiJobStatus === 'queued' && (
+                <p className="text-sm text-neutral-400 font-medium animate-pulse">
+                  Job queued... waiting for a free worker node.
+                </p>
+              )}
+              {aiJobStatus === 'initiated' && (
+                <p className="text-sm text-[#00AAFF] font-medium animate-pulse">
+                  Worker assigned! Setting up workspace...
+                </p>
+              )}
+              {aiJobStatus === 'processing' && (
+                <p className="text-sm text-green-400 font-semibold animate-pulse">
+                  Model executing... colorizing timeline frames.
+                </p>
+              )}
+              {!aiJobStatus && (
+                <p className="text-sm text-neutral-400 font-medium">
+                  Preparing sequence pipelines...
+                </p>
+              )}
             </div>
+
+            {/* Micro-visual indicator of progress status dots */}
+            <div className="flex gap-1.5 justify-center">
+              <span className={`w-2 h-2 rounded-full transition-all duration-300 ${aiJobStatus ? 'bg-[#00AAFF]' : 'bg-neutral-700'}`} />
+              <span className={`w-2 h-2 rounded-full transition-all duration-300 ${['initiated', 'processing'].includes(aiJobStatus || '') ? 'bg-[#00AAFF] animate-pulse' : 'bg-neutral-700'}`} />
+              <span className={`w-2 h-2 rounded-full transition-all duration-300 ${aiJobStatus === 'processing' ? 'bg-green-400 animate-bounce' : 'bg-neutral-700'}`} />
+            </div>
+
           </div>
         </div>
       )}
@@ -1066,9 +1379,9 @@ export default function Editor({ onNavigate, isAuthenticated, user, profile, onA
             <div className="space-y-2">
               <h3 className="text-2xl font-black text-white tracking-tight">Render Complete! 🎉</h3>
               <p className="text-neutral-400 text-sm leading-relaxed">
-                Your frames have been successfully colorized [1.2.4]. Since you are in <strong className="text-red-400 uppercase">Local Privacy Mode</strong>, no files have been saved to Cloud Storage [1.2.4].
+                Your frames have been successfully colorized [1.2.4]. Since you are in <strong className="text-red-400 uppercase">Local Privacy Mode</strong>, no files have been saved to Cloud Storage.
               </p>
-              <p className="text-neutral-200 text-sm font-semibold pt-2">A ZIP containing your output frames has been compiled [1.2.4].</p>
+              <p className="text-neutral-200 text-sm font-semibold pt-2">A ZIP containing your output frames has been compiled.</p>
             </div>
 
             <button
