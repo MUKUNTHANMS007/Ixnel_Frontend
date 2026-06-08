@@ -12,6 +12,10 @@ export interface ProjectAsset {
   created_at: string;
 }
 
+export interface GetMyJobsResponse {
+  jobs: JobRecord[];
+}
+
 export interface Project {
   id: string;
   profile_id: string;
@@ -37,8 +41,11 @@ export interface JobRecord {
   output_path: string | null;
   status: 'queued' | 'blocked' | 'processing' | 'completed' | 'failed' | 'cancelled';
   job_cost: number;
-  model_version: string;
+  model_version: string;  
   priority: number;
+  error_message?: string | null;       // Added to resolve compiler error
+  processing_time_ms?: number | null;  // Added for analytical completeness
+  batchJobIds?: string[]; 
   created_at: string;
 }
 
@@ -95,17 +102,14 @@ export const projectAPI = {
     });
   },
 
+  // Replace submitJob in src/lib/project_api.ts
   submitJob: async (
-    projectId: string,
-    inputPath: string,
-    jobCost: number,
-    modelVersion: string,
-    priority: number = 0
+    formData: FormData
   ): Promise<ApiResponse<JobRecord>> => {
     const token = localStorage.getItem('accessToken');
-    return api<JobRecord>('/jobs/submit', { // Aligned to your exact '/submit' route
+    return api<JobRecord>('/jobs/submit', { // // Reverted back to /submit
       method: 'POST',
-      body: { projectId, inputPath, jobCost, modelVersion, priority },
+      body: formData, // standard fetch automatically parses FormData and generates boundary headers [1.1.2]
       token,
     });
   },
@@ -135,5 +139,13 @@ export const projectAPI = {
       method: 'DELETE',
       token,
     });
-  }
+  },
+
+getMyJobs: async (): Promise<ApiResponse<GetMyJobsResponse>> => {
+    const token = localStorage.getItem('accessToken');
+    return api<GetMyJobsResponse>('/jobs', {
+      method: 'GET',
+      token,
+    });
+  },
 };

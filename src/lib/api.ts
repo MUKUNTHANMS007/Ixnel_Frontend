@@ -21,6 +21,7 @@ export interface UserProfile {
   user_type          : 'individual' | 'company';
   company_name       : string | null;
   credits            : number;
+  current_credit_balance: number;
   subscription_credits: number; // Added to support separated balance rendering [1.2.4]
   purchased_credits  : number;  // Added to support separated balance rendering [1.2.4]
   reserved_credits   : number;
@@ -49,9 +50,10 @@ export interface SubscriptionRecord {
 }
 
 export interface ApiOptions {
-  method? : string;
-  body?   : unknown;
-  token?  : string | null;
+  method?  : string;
+  body?    : unknown;
+  token?   : string | null;
+  headers? : Record<string, string>;
 }
 
 export interface ApiResponse<T = unknown> {
@@ -125,6 +127,7 @@ export interface RefreshResponse {
 // BASE FETCH WRAPPER (Real HTTP Callouts)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Replace the start of the api function in src/lib/api.ts
 export async function api<T = unknown>(
   endpoint : string,
   options  : ApiOptions = {},
@@ -132,22 +135,28 @@ export async function api<T = unknown>(
   const { method = 'GET', body, token } = options;
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+     ...options.headers,
   };
 
-  // If a JWT token is passed, add the standard Bearer header
+  // 1. If a JWT token is passed, map the authorization header correctly
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  // 2. Only append JSON Content-Type if the body is NOT binary FormData
+  if (body && !(body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
   }
 
   const controller = new AbortController();
   const timeoutId  = setTimeout(() => controller.abort(), 10000);
 
   try {
+    // 3. Bypass JSON.stringify if body is an instance of FormData
     const res = await fetch(`${API_BASE}${endpoint}`, {
       method,
       headers,
-      body   : body ? JSON.stringify(body) : undefined,
+      body   : body instanceof FormData ? (body as any) : (body ? JSON.stringify(body) : undefined),
       signal : controller.signal,
     });
 
@@ -174,7 +183,71 @@ export async function api<T = unknown>(
     }
 
     // Handle non-OK HTTP statuses
+    // Handle non-OK HTTP statuses with transparent token auto-refresh
     if (!res.ok) {
+      
+      // ⚠️ INTERCEPT 401: If access token expired, attempt silent rotation before failing
+      if (res.status === 401 && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/login')) {
+        const refreshToken = localStorage.getItem('refreshToken');
+        
+        if (refreshToken) {
+          console.log(`[api][${endpoint}] Access token expired. Attempting silent token refresh...`);
+          
+          try {
+            // Request fresh tokens directly using native fetch to bypass recursive loops
+            const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refreshToken })
+            });
+
+            if (refreshRes.ok) {
+              const refreshData = await refreshRes.json();
+              
+              if (refreshData.success && refreshData.accessToken) {
+                // Save new keys
+                localStorage.setItem('accessToken', refreshData.accessToken);
+                if (refreshData.refreshToken) {
+                  localStorage.setItem('refreshToken', refreshData.refreshToken);
+                }
+
+                console.log(`[api][${endpoint}] Refresh successful! Retrying original request with new token.`);
+
+                // Re-bind headers with the fresh token
+                const newHeaders = { 
+                  ...headers, 
+                  'Authorization': `Bearer ${refreshData.accessToken}` 
+                };
+
+                // Re-execute the original request
+                const retryRes = await fetch(`${API_BASE}${endpoint}`, {
+                  method,
+                  headers: newHeaders,
+                  body: body instanceof FormData ? (body as any) : (body ? JSON.stringify(body) : undefined),
+                  signal: controller.signal
+                });
+
+                if (retryRes.ok) {
+                  const retryRaw = await retryRes.json();
+                  const { success, error, message, pagination, ...payload } = retryRaw;
+                  
+                  // Return successful retried data back to your polling intervals
+                  return {
+                    success    : success as boolean,
+                    error      : error as string | undefined,
+                    message    : message as string | undefined,
+                    pagination : pagination as ApiResponse['pagination'],
+                    data       : payload as T,
+                  };
+                }
+              }
+            }
+          } catch (refreshError) {
+            console.error('[api] Silent token refresh exception caught:', refreshError);
+          }
+        }
+      }
+
       return {
         success : false,
         error   : (raw.error as string) || `Server error: ${res.status}`,
