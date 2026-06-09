@@ -19,6 +19,8 @@ import OAuthCallback from './components/OAuthCallback';
 import { authAPI } from '../src/lib/api';
 import type { User, UserProfile, SubscriptionRecord } from '../src/lib/api';
 import PipelinePage from './pages/PipelinePage';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 import {
   Home as HomeIcon,
@@ -36,7 +38,18 @@ import {
 
 export default function App() {
   // ─ Persistent Routing State ─────────────────────────────────────────────
+  // ─ Persistent Routing State with Dynamic Startup Routing ────────────────
   const [activePage, setActivePage] = useState<string>(() => {
+    const path = window.location.pathname;
+
+    // ⚠️ Check if the user lands directly on a secure verification or reset link [1.2.4]
+    if (path === '/reset-password') {
+      return 'reset-password';
+    }
+    if (path === '/verify-email') {
+      return 'verify-email';
+    }
+
     const savedPage = localStorage.getItem('activePage');
     // Avoid staying stuck on temporary popup page on reload
     if (savedPage === 'oauth-callback') return 'home';
@@ -175,6 +188,8 @@ export default function App() {
       case 'profile':        
         return <ProfilePage onNavigate={navigateAndPersist} user={user} profile={profile} subscription={subscription} onLogout={handleLogout} payments={payments}/>;
       case 'oauth-callback': return <OAuthCallback onNavigate={navigateAndPersist} />;
+      case 'forgot-password': return <ForgotPassword onNavigate={navigateAndPersist} />;
+      case 'reset-password': return <ResetPassword onNavigate={navigateAndPersist} />
       default:               return <Home onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated} />;
     }
   };
