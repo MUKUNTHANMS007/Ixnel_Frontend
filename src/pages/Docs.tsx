@@ -1,251 +1,404 @@
+// src/pages/Docs.tsx
+
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  ChevronRight, 
-  Search,
-  Menu,
-  X,
-  BookOpen
+  Terminal, 
+  BookOpen, 
+  Download, 
+  Key, 
+  HelpCircle, 
+  Check, 
+  ArrowRight, 
+  AlertTriangle, 
+  Layers, 
+  Sliders,
+  ExternalLink,
+  ChevronRight,
+  SlidersHorizontal
 } from 'lucide-react';
+import type { User } from '../lib/api'; // Safe type-only import [1.1.9, 1.3.1]
 
-const ImagePlaceholder = ({ src, alt, caption }: { src: string; alt: string; caption?: string }) => (
-  <figure className="my-10">
-    <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-black/20 shadow-sm aspect-video flex items-center justify-center group transition-all duration-300 hover:shadow-lg hover:shadow-[#00AAFF]/10 hover:border-[#00AAFF]/50">
-      {/* Pattern Background */}
-      <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:16px_16px]" />
-      
-      <img 
-        src={src} 
-        alt={alt} 
-        className="absolute inset-0 w-full h-full object-cover object-center z-10 transition-transform duration-700 ease-out group-hover:scale-[1.02]"
-        onError={(e) => {
-          // If image fails to load, hide it and show placeholder
-          e.currentTarget.style.display = 'none';
-        }}
-      />
-      
-      {/* Placeholder content underneath the image */}
-      <div className="text-center z-0 p-6 relative">
-        <div className="w-14 h-14 rounded-full bg-[#00AAFF]/10 text-[#00AAFF] flex items-center justify-center mx-auto mb-4 border border-[#00AAFF]/20 group-hover:bg-[#00AAFF]/20 transition-colors">
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-        </div>
-        <h3 className="text-white font-semibold mb-1">Image Required</h3>
-        <p className="text-sm text-neutral-400 max-w-sm mx-auto leading-relaxed">
-          Please take a screenshot of the editor and save it as <br/>
-          <code className="bg-neutral-900 px-2 py-1 rounded-md border border-white/10 mt-2 inline-block font-mono text-xs text-[#00AAFF] shadow-sm">
-            public{src}
-          </code>
-        </p>
-      </div>
-    </div>
-    {caption && (
-      <figcaption className="text-center text-sm text-neutral-500 mt-4 font-medium flex items-center justify-center gap-2">
-        <span className="w-4 h-px bg-white/20"></span>
-        {caption}
-        <span className="w-4 h-px bg-white/20"></span>
-      </figcaption>
-    )}
-  </figure>
-);
+interface DocsPageProps {
+  onNavigate: (page: string) => void;
+  user: User | null;
+}
 
-const Docs = () => {
-  const [activeSection, setActiveSection] = useState('Introduction');
-  const[isSidebarOpen, setIsSidebarOpen] = useState(false);
+interface DocSection {
+  id: string;
+  title: string;
+  category: string;
+}
 
-  // Scroll to top when section changes on mobile
+const DOC_SECTIONS: DocSection[] = [
+  { id: 'introduction', title: 'Welcome to Ixnel', category: 'General' },
+  { id: 'getting-started', title: 'Installation Guide', category: 'Setup' },
+  { id: 'auth', title: 'Developer Keys', category: 'Security' },
+  { id: 'ae-guide', title: 'Workspace Configuration', category: 'Plugin' },
+  { id: 'troubleshooting', title: 'Failsafes & Warnings', category: 'Support' },
+];
+
+export default function DocsPage({ onNavigate, user }: DocsPageProps) {
+  const [activeSection, setActiveSection] = useState('introduction');
+  const [activePlugin, setActivePlugin] = useState('after_effects');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  // Direct Download Pointer targeting your Google Drive file ID
+  const GOOGLE_DRIVE_FILE_ID = import.meta.env.VITE_AE_INSTALLER_DRIVE_ID || '1_7Y6fGgX7XJv8R8fS9Hq9e6bT6_EXAMPLE';
+  const installerDownloadUrl = `https://drive.google.com/uc?export=download&id=${GOOGLE_DRIVE_FILE_ID}`;
+
+  // IntersectionObserver Scroll-Spy to dynamically track scrolled sections
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [activeSection]);
+    const observerOptions = {
+      root: null,
+      rootMargin: '-20% 0px -60% 0px',
+      threshold: 0,
+    };
 
-  // Simplified Navigation - Easy to add more sections here later
-  const navigation =[
-    {
-      title: 'Getting Started',
-      items: ['Introduction', 'Quick Start Guide']
-    },
-    {
-      title: 'Core Mechanics',
-      items: ['Workspace Overview', 'Animation Pipeline']
+    const observerCallback = (entries: IntersectionObserverEntry[]) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          setActiveSection(entry.target.id);
+        }
+      });
+    };
+
+    const observer = new IntersectionObserver(observerCallback, observerOptions);
+
+    DOC_SECTIONS.forEach((sec) => {
+      const el = document.getElementById(sec.id);
+      if (el) observer.observe(el);
+    });
+
+    return () => {
+      DOC_SECTIONS.forEach((sec) => {
+        const el = document.getElementById(sec.id);
+        if (el) observer.unobserve(el);
+      });
+    };
+  }, []);
+
+  const scrollToSection = (id: string) => {
+    setActiveSection(id);
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  ];
+  };
 
-  // Helper to get previous and next sections for pagination
-  const allItems = navigation.flatMap(group => group.items);
-  const currentIndex = allItems.indexOf(activeSection);
-  const prevSection = currentIndex > 0 ? allItems[currentIndex - 1] : null;
-  const nextSection = currentIndex < allItems.length - 1 ? allItems[currentIndex + 1] : null;
-
-  const renderContent = () => {
-    switch (activeSection) {
-      case 'Introduction':
-        return (
-          <div className="space-y-6">
-            <p className="text-lg text-neutral-400 leading-relaxed">
-              Welcome to <strong className="text-white">Ixnel (The Hybrid 2D/3D Animation Pipeline)</strong>. This platform allows you to create fully realized scenes directly in your browser without any prior installation or heavy software.
-            </p>
-            <p className="text-lg text-neutral-400 leading-relaxed">
-              More documentation on core features and workflows will be added here shortly.
-            </p>
-            <ImagePlaceholder 
-              src="/docs/editor-overview.png" 
-              alt="Overview of the Ixnel interface" 
-              caption="The main editor interface featuring the canvas, sidebars, and top navigation"
-            />
-          </div>
-        );
-      default:
-        // A generic fallback view for sections you haven't filled out yet
-        return (
-          <div className="bg-black/20 rounded-3xl border border-white/5 p-12 text-center border-dashed my-8">
-            <BookOpen className="w-12 h-12 text-neutral-600 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-white mb-2">Coming Soon</h3>
-            <p className="text-neutral-400 font-medium">This section ({activeSection}) is currently being written and will be published soon.</p>
-          </div>
-        );
+  const handleGoToKeys = () => {
+    if (user) {
+      onNavigate('profile');
+    } else {
+      onNavigate('signup');
     }
   };
 
   return (
-    <div className="w-full bg-neutral-950 text-white min-h-screen">
-      {/* Mobile Sidebar Toggle */}
-      <div className="md:hidden fixed bottom-6 right-6 z-50">
-        <button 
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="w-14 h-14 rounded-full bg-[#00AAFF] text-neutral-950 flex items-center justify-center shadow-lg shadow-[#00AAFF]/25 hover:bg-white hover:scale-105 active:scale-95 transition-all"
-        >
-          {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-      </div>
-
-      {/* Mobile Sidebar Overlay */}
-      <div 
-        className={`md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-30 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        onClick={() => setIsSidebarOpen(false)}
-      />
-
-      <div className="max-w-8xl mx-auto px-6 flex relative">
-        {/* Sidebar */}
-        <aside className={`
-          fixed md:sticky top-20 h-[calc(100vh-5rem)] w-72 overflow-y-auto pl-2 pr-8 py-10 border-r border-white/5 bg-neutral-950
-          transition-transform duration-300 ease-in-out z-40
-          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-          left-0 md:left-auto
-        `}>
-          <div className="relative mb-10 pl-4">
-            <div className="absolute inset-y-0 left-7 flex items-center pointer-events-none">
-              <Search size={14} className="text-neutral-500" />
+    <div className="container mx-auto px-4 py-12 max-w-7xl">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+        
+        {/* ─── LEFT SIDEBAR NAVIGATION (LG: COL-SPAN 3 - Positioned Near Far-Left Boundary) ─── */}
+        <div className="lg:col-span-3 sticky top-24 space-y-6">
+          <div className="bg-white/[0.02] border border-white/10 rounded-3xl p-6 shadow-2xl space-y-6">
+            <div className="flex items-center gap-3 pb-4 border-b border-white/10">
+              <BookOpen className="w-6 h-6 text-[#00AAFF]" />
+              <h2 className="text-xl font-bold text-white">Ixnel AI Docs</h2>
             </div>
-            <input 
-              type="text" 
-              placeholder="Search documentation..."
-              className="w-full bg-black/40 hover:bg-black/60 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-[#00AAFF]/20 focus:border-[#00AAFF] text-white outline-none transition-all placeholder:text-neutral-500"
-            />
-          </div>
 
-          <nav className="space-y-10 pl-4">
-            {navigation.map((group) => (
-              <div key={group.title}>
-                <h4 className="text-xs font-bold text-white uppercase tracking-widest mb-4">
-                  {group.title}
-                </h4>
-                <ul className="space-y-1.5 border-l-2 border-white/5 ml-1">
-                  {group.items.map((item) => (
-                    <li key={item}>
-                      <button
-                        onClick={() => {
-                          setActiveSection(item);
-                          setIsSidebarOpen(false);
-                        }}
-                        className={`
-                          group flex items-center gap-3 w-full text-sm font-medium transition-all px-4 py-2 -ml-[2px] border-l-2
-                          ${activeSection === item 
-                            ? 'text-[#00AAFF] border-[#00AAFF] bg-[#00AAFF]/10 rounded-r-lg' 
-                            : 'text-neutral-400 border-transparent hover:text-white hover:border-white/30'
-                          }
-                        `}
-                      >
-                        {item}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+            {/* Modular Plugin Dropdown Selector */}
+            <div className="space-y-2 pb-4 border-b border-white/10">
+              <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest block">Active Plugin Extension</label>
+              <div className="relative">
+                {/* ⚠️ MODIFICATION: Custom styled trigger button */}
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="w-full flex items-center justify-between bg-neutral-900/60 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#00AAFF]/50 focus:border-[#00AAFF] font-bold transition-all hover:bg-neutral-800/40 text-left"
+                >
+                  <span>
+                    {activePlugin === 'after_effects' ? 'Adobe After Effects (Plugin)' : 'Blender (Coming Soon)'}
+                  </span>
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-[#00AAFF]" />
+                </button>
+
+                {/* ⚠️ MODIFICATION: Floating custom dropdown options list matching your dark UI */}
+                {isDropdownOpen && (
+                  <div className="absolute left-0 right-0 mt-2 bg-[#0c0c0d] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden divide-y divide-white/5 animate-in fade-in slide-in-from-top-2 duration-150">
+                    <div
+                      onClick={() => {
+                        setActivePlugin('after_effects');
+                        setIsDropdownOpen(false);
+                      }}
+                      className={`px-4 py-3 text-xs font-bold cursor-pointer transition-colors flex items-center justify-between ${
+                        activePlugin === 'after_effects' 
+                          ? 'bg-[#00AAFF]/10 text-[#00AAFF]' 
+                          : 'text-neutral-300 hover:bg-white/5'
+                      }`}
+                    >
+                      <span>Adobe After Effects (Plugin)</span>
+                      {activePlugin === 'after_effects' && <Check className="w-3.5 h-3.5 text-[#00AAFF]" />}
+                    </div>
+                    
+                    <div
+                      className="px-4 py-3 text-xs font-bold text-neutral-600 bg-neutral-950/20 cursor-not-allowed flex items-center justify-between opacity-45 select-none"
+                    >
+                      <span>Blender (Coming Soon)</span>
+                    </div>
+                  </div>
+                )}
               </div>
-            ))}
-          </nav>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 min-w-0 py-10 md:py-16 md:px-12 lg:px-20">
-          <div className="max-w-3xl mx-auto xl:mx-0">
-            {/* Breadcrumbs */}
-            <div className="flex items-center gap-2 text-sm font-medium text-neutral-400 mb-8 bg-[#00AAFF]/5 w-fit px-4 py-1.5 rounded-full border border-[#00AAFF]/20">
-              <span className="text-neutral-500">Documentation</span>
-              <ChevronRight size={14} className="text-neutral-500" />
-              <span>{navigation.find(g => g.items.includes(activeSection))?.title}</span>
-              <ChevronRight size={14} className="text-neutral-500" />
-              <span className="text-[#00AAFF] font-semibold">{activeSection}</span>
             </div>
-
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeSection}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                transition={{ duration: 0.3, ease: "easeOut" }}
-              >
-                <div className="mb-10">
-                  <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white mb-4">
-                    {activeSection}
-                  </h1>
-                  <div className="h-1.5 w-20 bg-[#00AAFF] rounded-full shadow-[0_0_15px_rgba(0,170,255,0.5)]" />
-                </div>
-
-                <article className="prose prose-invert prose-lg max-w-none prose-headings:font-bold prose-p:text-neutral-400 prose-img:rounded-2xl prose-img:border prose-img:border-white/10 prose-a:text-[#00AAFF]">
-                  {renderContent()}
-                </article>
-
-                {/* Pagination / Related Links */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-20 pt-10 border-t border-white/5">
-                  {prevSection ? (
-                    <button 
-                      onClick={() => setActiveSection(prevSection)}
-                      className="flex items-center gap-4 p-6 rounded-2xl border border-white/10 hover:border-[#00AAFF]/40 hover:bg-[#00AAFF]/5 transition-all duration-300 text-left group"
-                    >
-                      <div className="p-3 rounded-xl bg-neutral-900 border border-white/10 shadow-sm group-hover:scale-110 group-hover:text-[#00AAFF] group-hover:border-[#00AAFF]/40 transition-all">
-                        <ChevronRight size={20} className="rotate-180" />
-                      </div>
-                      <div>
-                        <span className="text-xs text-neutral-500 font-bold uppercase tracking-wider block mb-1">Previous</span>
-                        <h4 className="font-bold text-white group-hover:text-[#00AAFF] transition-colors">{prevSection}</h4>
-                      </div>
-                    </button>
-                  ) : <div />}
-                  
-                  {nextSection ? (
-                    <button 
-                      onClick={() => setActiveSection(nextSection)}
-                      className="flex items-center flex-row-reverse gap-4 p-6 rounded-2xl border border-white/10 hover:border-[#00AAFF]/40 hover:bg-[#00AAFF]/5 transition-all duration-300 text-right group"
-                    >
-                      <div className="p-3 rounded-xl bg-neutral-900 border border-white/10 shadow-sm group-hover:scale-110 group-hover:text-[#00AAFF] group-hover:border-[#00AAFF]/40 transition-all">
-                        <ChevronRight size={20} />
-                      </div>
-                      <div>
-                        <span className="text-xs text-neutral-500 font-bold uppercase tracking-wider block mb-1">Next</span>
-                        <h4 className="font-bold text-white group-hover:text-[#00AAFF] transition-colors">{nextSection}</h4>
-                      </div>
-                    </button>
-                  ) : <div />}
-                </div>
-              </motion.div>
-            </AnimatePresence>
+            
+            <nav className="space-y-1.5">
+              {DOC_SECTIONS.map((sec) => (
+                <button
+                  key={sec.id}
+                  onClick={() => scrollToSection(sec.id)}
+                  className={`w-full text-left px-4 py-3 rounded-2xl text-xs font-semibold flex items-center justify-between group transition-all ${
+                    activeSection === sec.id 
+                      ? 'bg-[#00AAFF]/10 text-[#00AAFF] border border-[#00AAFF]/20' 
+                      : 'text-neutral-400 hover:text-white hover:bg-white/[0.02] border border-transparent'
+                  }`}
+                >
+                  <span className="flex flex-col">
+                    <span className="text-[8px] text-neutral-500 uppercase font-black mb-0.5 tracking-wider">{sec.category}</span>
+                    <span className="text-sm font-bold">{sec.title}</span>
+                  </span>
+                  <ChevronRight className={`w-4 h-4 opacity-40 group-hover:opacity-100 transition-opacity ${
+                    activeSection === sec.id ? 'opacity-100 text-[#00AAFF]' : ''
+                  }`} />
+                </button>
+              ))}
+            </nav>
           </div>
-        </main>
+        </div>
+
+        {/* ─── RIGHT CONTENT AREA (LG: COL-SPAN 9) ─── */}
+        <div className="lg:col-span-9 space-y-10 pb-24">
+          
+          {/* Section 1: Welcome / Introduction */}
+          <section id="introduction" className="bg-white/[0.02] border border-white/10 rounded-3xl p-8 shadow-2xl space-y-6 scroll-mt-24">
+            <h2 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
+              <span className="w-1.5 h-7 bg-[#00AAFF] rounded-full" />
+              Welcome to Ixnel AI
+            </h2>
+            <div className="space-y-6 text-base text-neutral-300 leading-relaxed font-medium">
+              <p className="text-lg text-neutral-200 leading-relaxed">
+                <strong className="text-[#00AAFF] font-extrabold text-xl">Ixnel AI</strong> is a multi-product creative workspace toolkit. One of the primary products we offer is <strong className="text-[#00AAFF] font-bold">Ixnel Colorizer</strong>.
+              </p>
+              
+              <div className="p-6 bg-black/20 border border-white/5 rounded-2xl space-y-4">
+                <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest">How the Colorizer Behaves:</p>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mt-0.5 flex-shrink-0">
+                      <div className="w-3 h-3" />
+                    </div>
+                    <p className="text-sm text-neutral-400 font-semibold leading-relaxed">
+                      It does <strong className="text-white font-bold">NOT</strong> draw new lines, generate vector outlines, or modify your original ink drawings.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center text-green-400 mt-0.5 flex-shrink-0">
+                      <Check className="w-3 h-3" />
+                    </div>
+                    <p className="text-sm text-neutral-400 font-semibold leading-relaxed">
+                      Instead, it automatically maps your flat color palette to your outlines, ensuring your final colors remain <strong className="text-[#00AAFF] font-bold">fully matched and coherent across your entire frame sequence</strong> without flickering.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Render After Effects Content if activePlugin is selected */}
+          {activePlugin === 'after_effects' && (
+            <div className="space-y-10">
+              
+              {/* Section 2: Getting Started & Installation */}
+              <section id="getting-started" className="bg-white/[0.02] border border-white/10 rounded-3xl p-8 shadow-2xl space-y-6 scroll-mt-24">
+                <h2 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
+                  <span className="w-1.5 h-7 bg-[#00AAFF] rounded-full" />
+                  Installation Guide (Adobe AE)
+                </h2>
+                
+                <div className="space-y-6 text-base text-neutral-300 font-medium">
+                  <p className="leading-relaxed">
+                    We provide an automated, one-click Windows installer that registers the plugin folder and configures your system bypasses.
+                  </p>
+
+                  {/* Direct Download Action */}
+                  <div className="p-6 bg-black/35 border border-white/5 rounded-2xl space-y-4 max-w-lg">
+                    <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Download Setup Package</p>
+                    <a
+                      href={installerDownloadUrl}
+                      className="inline-flex items-center gap-2.5 px-6 py-3.5 bg-[#00AAFF] text-neutral-950 hover:bg-white transition-all font-black text-xs uppercase tracking-wider rounded-xl shadow-md shadow-[#00AAFF]/10 group"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download Windows Installer
+                      <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                    </a>
+                  </div>
+
+                  <div className="space-y-4 pt-2">
+                    <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Execution Steps:</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="p-5 bg-black/20 border border-white/5 rounded-2xl space-y-1.5">
+                        <span className="text-[#00AAFF] font-black text-sm">Step 1</span>
+                        <p className="text-xs text-neutral-400 leading-relaxed font-semibold">
+                          Run the downloaded <code className="text-white">IxnelColorizer_Setup.exe</code> with Administrator privileges.
+                        </p>
+                      </div>
+                      <div className="p-5 bg-black/20 border border-white/5 rounded-2xl space-y-1.5">
+                        <span className="text-[#00AAFF] font-black text-sm">Step 2</span>
+                        <p className="text-xs text-neutral-400 leading-relaxed font-semibold">
+                          Click <strong className="text-white font-bold">Install</strong>. Files are placed in common Adobe CEP paths automatically.
+                        </p>
+                      </div>
+                      <div className="p-5 bg-black/20 border border-white/5 rounded-2xl space-y-1.5">
+                        <span className="text-[#00AAFF] font-black text-sm">Step 3</span>
+                        <p className="text-xs text-neutral-400 leading-relaxed font-semibold">
+                          Launch Adobe After Effects and navigate to the top menu.
+                        </p>
+                      </div>
+                      <div className="p-5 bg-black/20 border border-white/5 rounded-2xl space-y-1.5">
+                        <span className="text-[#00AAFF] font-black text-sm">Step 4</span>
+                        <p className="text-xs text-neutral-400 leading-relaxed font-semibold">
+                          Click <strong className="text-white font-bold">Window &gt; Extensions &gt; Ixnel Colorizer</strong> to open your panel.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Section 3: Developer API Keys */}
+              <section id="auth" className="bg-white/[0.02] border border-white/10 rounded-3xl p-8 shadow-2xl space-y-6 scroll-mt-24">
+                <h2 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
+                  <span className="w-1.5 h-7 bg-[#00AAFF] rounded-full" />
+                  API Keys Authentication
+                </h2>
+                <div className="space-y-6 text-base text-neutral-300 leading-relaxed font-medium">
+                  <p>
+                    The After Effects extension communicates with our servers via your profile’s secret API key. This key authorizes usage and maps render costs to your credits balance.
+                  </p>
+                  
+                  <div className="p-5 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs font-semibold rounded-2xl flex items-start gap-2.5 leading-relaxed">
+                    <AlertTriangle className="w-4.5 h-4.5 flex-shrink-0 mt-0.5" />
+                    <span>Generate your key below. Once closed, the raw key is encrypted and <strong className="text-yellow-300 font-bold">cannot be viewed again</strong> for security reasons.</span>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={handleGoToKeys}
+                      className="inline-flex items-center gap-2 px-5 py-3 border border-white/10 hover:border-white/20 text-white rounded-xl font-bold text-xs hover:bg-white/[0.02] transition-all"
+                    >
+                      <Key className="w-4 h-4 text-[#00AAFF]" />
+                      Go to Developer Keys Section
+                      <ExternalLink className="w-3.5 h-3.5 text-neutral-500" />
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              {/* Section 4: After Effects Workspace Guide */}
+              <section id="ae-guide" className="bg-white/[0.02] border border-white/10 rounded-3xl p-8 shadow-2xl space-y-6 scroll-mt-24">
+                <h2 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
+                  <span className="w-1.5 h-7 bg-[#00AAFF] rounded-full" />
+                  Workspace Configuration
+                </h2>
+                
+                <div className="space-y-8 text-base text-neutral-300 font-medium">
+                  <p className="leading-relaxed">
+                    To achieve correct results, the extension applies frame-matching algorithms that compare your active line-art layer with your reference artwork on disk.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="p-6 bg-black/20 border border-white/5 rounded-2xl space-y-2 hover:border-white/10 transition-colors">
+                      <div className="flex items-center gap-2 text-white font-bold">
+                        <Layers className="w-4 h-4 text-[#00AAFF]" />
+                        <span>1. Target Layer</span>
+                      </div>
+                      <p className="text-xs text-neutral-500 leading-relaxed font-semibold">
+                        Select <strong className="text-white font-bold">exactly one</strong> line-art layer in your timeline. This layer must be an <strong className="text-white font-bold">imported Image Sequence</strong> (PNG or JPG files). Raw shapes, vector paths, and pre-compositions are not supported.
+                      </p>
+                    </div>
+
+                    <div className="p-6 bg-black/20 border border-white/5 rounded-2xl space-y-2 hover:border-white/10 transition-colors">
+                      <div className="flex items-center gap-2 text-white font-bold">
+                        <Sliders className="w-4 h-4 text-[#00AAFF]" />
+                        <span>2. Partition Strategy</span>
+                      </div>
+                      <p className="text-xs text-neutral-500 leading-relaxed font-semibold">
+                        For sequences longer than 24 frames, select <strong className="text-[#00AAFF] font-bold">Sliding Window</strong>. This automatically splices frames into overlapping chunks, which is crucial to keep colors fully coherent and prevent visual flickering.
+                      </p>
+                    </div>
+
+                    <div className="p-6 bg-black/20 border border-white/5 rounded-2xl space-y-2 hover:border-white/10 transition-colors">
+                      <div className="flex items-center gap-2 text-white font-bold">
+                        <Check className="w-4 h-4 text-[#00AAFF]" />
+                        <span>3. Auto-Blending</span>
+                      </div>
+                      <p className="text-xs text-neutral-500 leading-relaxed font-semibold">
+                        Ensure <strong className="text-white font-bold">Auto-Layering</strong> is checked. On successful job completion, the plugin automatically imports the sequence, positions it directly beneath your lines, and applies a <strong className="text-[#00AAFF] font-bold">Multiply</strong> blend mode to your line-art—preserving your original ink details.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Section 5: Troubleshooting & Safety */}
+              <section id="troubleshooting" className="bg-white/[0.02] border border-white/10 rounded-3xl p-8 shadow-2xl space-y-6 scroll-mt-24">
+                <h2 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
+                  <span className="w-1.5 h-7 bg-[#00AAFF] rounded-full" />
+                  Failsafes & Warnings
+                </h2>
+                
+                <div className="space-y-6 text-base text-neutral-300 font-medium">
+                  <p className="leading-relaxed">
+                    Review these custom, in-plugin failsafes designed to prevent accidental over-spending and keep your workflow synchronized:
+                  </p>
+
+                  <div className="divide-y divide-white/5 border border-white/5 rounded-2xl bg-black/20">
+                    <div className="p-5 space-y-2">
+                      <p className="text-sm font-bold text-white flex items-center gap-2">
+                        <HelpCircle className="w-4 h-4 text-[#00AAFF] flex-shrink-0" />
+                        "Timeline Collision" Warn Card
+                      </p>
+                      <p className="text-xs text-neutral-500 leading-relaxed font-semibold pl-6">
+                        The plugin continuously scans your active composition for already colorized frame ranges. If you select a range that is already covered, the <strong className="text-yellow-400 font-bold">Timeline Selected</strong> warning card will appear and lock the submission to protect your credits.
+                      </p>
+                    </div>
+
+                    <div className="p-5 space-y-2">
+                      <p className="text-sm font-bold text-white flex items-center gap-2">
+                        <HelpCircle className="w-4 h-4 text-[#00AAFF] flex-shrink-0" />
+                        The Double-Confirmation Modal
+                      </p>
+                      <p className="text-xs text-neutral-500 leading-relaxed font-semibold pl-6">
+                        If you choose to bypass the collision card by clicking <strong className="text-white font-bold">Allow Overwrite</strong>, the plugin triggers a second, explicit confirmation modal on submission. This confirms you are aware that re-colorizing these frames will deduct credits again.
+                      </p>
+                    </div>
+                    
+                    <div className="p-5 space-y-2">
+                      <p className="text-sm font-bold text-white flex items-center gap-2">
+                        <HelpCircle className="w-4 h-4 text-[#00AAFF] flex-shrink-0" />
+                        "Bridge Error" or Unresponsive Panel
+                      </p>
+                      <p className="text-xs text-neutral-500 leading-relaxed font-semibold pl-6">
+                        This occurs if After Effects' background scripting thread stalls. Simply click the <strong className="text-white font-bold">Refresh (⟳)</strong> button in the plugin panel header, or save your project and restart After Effects.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   );
-};
-
-export default Docs;
+}
