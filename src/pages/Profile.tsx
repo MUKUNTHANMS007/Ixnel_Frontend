@@ -215,39 +215,38 @@ export default function ProfilePage({ onNavigate, user, profile, subscription, p
     <div className="container mx-auto px-4 py-12 max-w-6xl">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
-        {/* ─── LEFT COLUMN: SIDEBAR METADATA & ACTIONS (Span 4 of 12) ─── */}
-        <div className="lg:col-span-4 space-y-6">
+        {/* ─── LEFT COLUMN: IDENTITY, ACTIONS, & BILLING LEDGER (Span 5 of 12) ─── */}
+        <div className="lg:col-span-5 space-y-6">
           
-          {/* Profile Identity Card */}
-          <div className="bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl space-y-6">
-            <div className="flex flex-col items-center text-center space-y-4">
-              <div className="w-20 h-26 rounded-full bg-[#00AAFF]/10 border-2 border-[#00AAFF]/30 flex items-center justify-center p-6 shadow-inner">
-                <UserIcon className="w-10 h-10 text-[#00AAFF]" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-black text-white tracking-tight">{profile.username}</h1>
-                <p className="text-sm text-neutral-400 font-medium select-all">{user.email}</p>
-              </div>
+          {/* Profile Identity Card (No Image Placeholder) */}
+          <div className="bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl space-y-5">
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Username</p>
+              <h1 className="text-3xl font-black text-white tracking-tight">{profile.username}</h1>
+              <p className="text-sm text-neutral-400 font-semibold select-all">{user.email}</p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
               <span className="px-4 py-1.5 bg-[#00AAFF]/15 border border-[#00AAFF]/30 text-[#00AAFF] text-[10px] font-black tracking-widest uppercase rounded-full">
                 {planDetails.badge} Account
               </span>
             </div>
 
-            <div className="border-t border-white/10 pt-6 space-y-4 text-sm">
+            <div className="border-t border-white/10 pt-5 space-y-3.5 text-xs">
               <div className="flex justify-between items-center bg-black/10 p-3 rounded-xl border border-white/5">
-                <span className="text-neutral-500 font-bold uppercase tracking-wider text-[10px]">Auth Provider</span>
+                <span className="text-neutral-500 font-bold uppercase tracking-wider text-[9px]">Auth Provider</span>
                 <span className="text-white font-semibold capitalize flex items-center gap-1.5">
                   <Shield className="w-3.5 h-3.5 text-[#00AAFF]" />
                   {user.auth_provider}
                 </span>
               </div>
               <div className="flex justify-between items-center bg-black/10 p-3 rounded-xl border border-white/5">
-                <span className="text-neutral-500 font-bold uppercase tracking-wider text-[10px]">Account Type</span>
+                <span className="text-neutral-500 font-bold uppercase tracking-wider text-[9px]">Account Type</span>
                 <span className="text-white font-semibold capitalize">{profile.user_type}</span>
               </div>
               {profile.company_name && (
                 <div className="flex justify-between items-center bg-black/10 p-3 rounded-xl border border-white/5">
-                  <span className="text-neutral-500 font-bold uppercase tracking-wider text-[10px]">Company</span>
+                  <span className="text-neutral-500 font-bold uppercase tracking-wider text-[9px]">Company</span>
                   <span className="text-white font-semibold">{profile.company_name}</span>
                 </div>
               )}
@@ -278,16 +277,67 @@ export default function ProfilePage({ onNavigate, user, profile, subscription, p
               <LogOut className="w-4 h-4 text-red-500/50 group-hover:text-red-400" />
             </button>
           </div>
+
+          {/* ─── MOVED: Billing History Ledger (Positioned Below Logout Area) ─── */}
+          <div className="bg-white/[0.02] border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+              <Clock className="w-5 h-5 text-[#00AAFF]" />
+              <h2 className="text-base font-bold text-white">Billing History Ledger</h2>
+            </div>
+
+            {payments.length === 0 ? (
+              <div className="p-6 text-center bg-black/20 border border-white/5 rounded-xl">
+                <p className="text-xs text-neutral-500">No payment transactions found.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto border border-white/5 rounded-xl bg-black/20">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-white/5 bg-white/[0.02]">
+                      <th className="p-3 font-bold text-neutral-500 uppercase tracking-widest text-[9px]">Date</th>
+                      <th className="p-3 font-bold text-neutral-500 uppercase tracking-widest text-[9px]">Amount</th>
+                      <th className="p-3 font-bold text-neutral-500 uppercase tracking-widest text-[9px]">Credits</th>
+                      <th className="p-3 font-bold text-neutral-500 uppercase tracking-widest text-[9px]">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 text-neutral-300 font-medium">
+                    {payments.slice(0, 8).map((tx) => (
+                      <tr key={tx.id} className="hover:bg-white/[0.01] transition-colors">
+                        <td className="p-3">{formatDate(tx.created_at)}</td>
+                        <td className="p-3 font-bold text-white">{tx.amount} {tx.currency_code}</td>
+                        <td className="p-3 font-bold text-[#00AAFF]">
+                          {tx.credits_added !== null 
+                            ? `+${tx.credits_added}` 
+                            : (tx.payment_type === 'subscription' ? '+500/mo' : '-')}
+                        </td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold capitalize ${
+                            tx.payment_status === 'completed' 
+                              ? 'bg-green-500/15 border border-green-500/30 text-green-400' 
+                              : tx.payment_status === 'pending' || tx.payment_status === 'processing'
+                                ? 'bg-yellow-500/15 border border-yellow-500/30 text-yellow-400'
+                                : 'bg-red-500/15 border border-red-500/30 text-red-400'
+                          }`}>
+                            {tx.payment_status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* ─── RIGHT COLUMN: INTERACTIVE CORE DASHBOARD (Span 8 of 12) ─── */}
-        <div className="lg:col-span-8 space-y-6">
+        {/* ─── RIGHT COLUMN: MAIN INTERACTIVE DETAILS (Span 7 of 12) ─── */}
+        <div className="lg:col-span-7 space-y-6">
           
-          {/* Active Balance Dashboard */}
+          {/* Active Credits Dashboard */}
           <div className="bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl space-y-6">
             <div className="flex items-center gap-3 pb-4 border-b border-white/10">
-              <CreditCard className="w-6 h-6 text-[#00AAFF]" />
-              <h2 className="text-xl font-bold text-white">Credit Balance</h2>
+              <CreditCard className="w-5 h-5 text-[#00AAFF]" />
+              <h2 className="text-lg font-bold text-white">Credit Balance</h2>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -331,7 +381,7 @@ export default function ProfilePage({ onNavigate, user, profile, subscription, p
           </div>
 
           {/* Active Plan Specifications Card */}
-          <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/10 shadow-xl space-y-6">
+          <div className="p-6 rounded-3xl bg-[#00AAFF]/[0.01] border border-white/10 shadow-xl space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/5">
               <div className="flex items-center gap-3">
                 <Crown className="w-5 h-5 text-[#00AAFF]" />
@@ -394,7 +444,7 @@ export default function ProfilePage({ onNavigate, user, profile, subscription, p
             </div>
           </div>
 
-          {/* Developer API Keys Management Panel */}
+          {/* Developer Settings & API Keys Panel */}
           <div className="bg-white/[0.02] border border-white/10 rounded-3xl p-6 shadow-2xl space-y-6">
             <div className="flex items-center justify-between pb-4 border-b border-white/10">
               <div className="flex items-center gap-3">
@@ -479,59 +529,6 @@ export default function ProfilePage({ onNavigate, user, profile, subscription, p
                 </div>
               )}
             </div>
-          </div>
-
-          {/* Webhook Payments Audit Ledger Table */}
-          <div className="bg-white/[0.02] border border-white/10 rounded-3xl p-6 shadow-2xl space-y-6">
-            <div className="flex items-center gap-3 pb-4 border-b border-white/10">
-              <Clock className="w-5 h-5 text-[#00AAFF]" />
-              <h2 className="text-xl font-bold text-white">Billing History Ledger</h2>
-            </div>
-
-            {payments.length === 0 ? (
-              <div className="p-8 text-center bg-black/20 border border-white/5 rounded-2xl">
-                <p className="text-sm text-neutral-500">No payment transactions found on this account.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto border border-white/5 rounded-2xl bg-black/20">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/5 bg-white/[0.02]">
-                      <th className="p-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Date</th>
-                      <th className="p-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Type</th>
-                      <th className="p-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Amount</th>
-                      <th className="p-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Credits</th>
-                      <th className="p-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5 text-sm text-neutral-300">
-                    {payments.map((tx) => (
-                      <tr key={tx.id} className="hover:bg-white/[0.01] transition-colors">
-                        <td className="p-4 font-medium">{formatDate(tx.created_at)}</td>
-                        <td className="p-4 font-semibold capitalize">{tx.payment_type.replace('_', ' ')}</td>
-                        <td className="p-4 font-bold text-white">{tx.amount} {tx.currency_code}</td>
-                        <td className="p-4 font-bold text-[#00AAFF]">
-                          {tx.credits_added !== null 
-                            ? `+${tx.credits_added}` 
-                            : (tx.payment_type === 'subscription' ? '+500/mo' : '-')}
-                        </td>
-                        <td className="p-4">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${
-                            tx.payment_status === 'completed' 
-                              ? 'bg-green-500/15 border border-green-500/30 text-green-400' 
-                              : tx.payment_status === 'pending' || tx.payment_status === 'processing'
-                                ? 'bg-yellow-500/15 border border-yellow-500/30 text-yellow-400'
-                                : 'bg-red-500/15 border border-red-500/30 text-red-400'
-                          }`}>
-                            {tx.payment_status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
 
         </div>

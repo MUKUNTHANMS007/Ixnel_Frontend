@@ -41,7 +41,7 @@ export default function ProductsPage({ onNavigate, isAuthenticated }: ProductsPr
             </div>
             <h3 className="text-2xl font-bold text-white mb-3">Semantic Colorization</h3>
             <p className="text-neutral-400 text-sm leading-relaxed mb-8 flex-grow">
-              Zero-bleed, studio-accurate coloring. Maps the exact texture and palette from your character reference sheet across all frames with perfect temporal consistency.
+              Zero-bleed, studio-accurate coloring. Maps the exact texture and palette from your character reference sheet across all frames with perfect consistency.
             </p>
             
             <button 
@@ -111,7 +111,7 @@ export default function ProductsPage({ onNavigate, isAuthenticated }: ProductsPr
               <h3 className="text-2xl font-black text-white">Plugins & Animation Workflows</h3>
             </div>
             <p className="text-neutral-400 leading-relaxed text-base">
-              Seamlessly integrate Ixnel's AI engines directly into your native workspace. We support animation-ready workflows designed specifically for <strong className="text-white">After Effects, Toon Boom, and Blender.</strong>
+              Seamlessly integrate Ixnel's AI engines directly into your native workspace. We support animation-ready workflows designed specifically for <strong className="text-white">After Effects.</strong>
             </p>
           </div>
 

@@ -154,7 +154,7 @@ export default function App() {
     { name: 'Pricing', id: 'pricing', icon: Sparkles },
     { name: 'Docs', id: 'docs', icon: FileText },
     { name: 'Projects', id: 'projects', icon: FolderOpen },
-    { name: 'News', id: 'news', icon: Newspaper },
+    //{ name: 'News', id: 'news', icon: Newspaper },
     { name: 'Feedback', id: 'feedback', icon: MessageSquare },
     
     // Toggle Profile/Login based on central state
@@ -170,8 +170,8 @@ export default function App() {
   const renderContent = () => {
     switch (activePage) {
       case 'home':           return <Home onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated} />;
-      case 'docs':           return <Docs />;
-      case 'news':           return <News />;
+      case 'docs':           return <Docs onNavigate={navigateAndPersist} user={user}/>;
+      //case 'news':           return <News />;
       case 'products':       
         return <ProductsPage onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated} />;
       case 'pipeline':       return <PipelinePage onNavigate={setActivePage}/>

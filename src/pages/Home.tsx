@@ -32,14 +32,6 @@ const Home = ({ onNavigate, isAuthenticated }: HomeProps) => {
           transition={{ duration: 0.6 }}
           className="relative z-10 flex flex-col items-center"
         >
-          {/* Top Pill */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#00AAFF]/30 bg-[#00AAFF]/5 mb-8">
-            <span className="w-2 h-2 rounded-full bg-[#00AAFF] animate-pulse" />
-            <span className="text-xs font-semibold tracking-widest uppercase text-neutral-300">
-              Beta Available Now • Limited Spots
-            </span>
-          </div>
-
           <h1 className="text-5xl md:text-7xl font-black text-white mb-6 tracking-tight leading-[1.1]">
             Semi-Autonomous Animation <br />
             Beyond <span className="text-[#00AAFF]">✦</span> Limits.
