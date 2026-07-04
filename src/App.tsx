@@ -21,6 +21,7 @@ import type { User, UserProfile, SubscriptionRecord } from '../src/lib/api';
 import PipelinePage from './pages/PipelinePage';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import VerifyEmail from './pages/VerifyEmail';
 
 import {
   Home as HomeIcon,
@@ -179,7 +180,7 @@ export default function App() {
         return <Projects onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated} user={user} profile={profile} />;
       case 'pricing':        return <PricingPage onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated}  subscription={subscription} onAuthSuccess={restoreSession}/>;
       case 'editor':         return <Editor onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated} user={user} profile={profile} onAuthSuccess={restoreSession} />;
-      case 'feedback':       return <FeedbackPage />;
+      case 'feedback':       return <FeedbackPage onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated} user={user} profile={profile}/>;
       case 'signin':         
         return <SignIn onNavigate={navigateAndPersist} onAuthSuccess={restoreSession} />;
       case 'signup':         
@@ -189,7 +190,8 @@ export default function App() {
         return <ProfilePage onNavigate={navigateAndPersist} user={user} profile={profile} subscription={subscription} onLogout={handleLogout} payments={payments}/>;
       case 'oauth-callback': return <OAuthCallback onNavigate={navigateAndPersist} />;
       case 'forgot-password': return <ForgotPassword onNavigate={navigateAndPersist} />;
-      case 'reset-password': return <ResetPassword onNavigate={navigateAndPersist} />
+      case 'reset-password': return <ResetPassword onNavigate={navigateAndPersist} />;
+      case 'verify-email':    return <VerifyEmail onNavigate={navigateAndPersist} onAuthSuccess={restoreSession} />;
       default:               return <Home onNavigate={navigateAndPersist} isAuthenticated={isAuthenticated} />;
     }
   };
