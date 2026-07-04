@@ -1,12 +1,22 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { MessageSquare, Send, Star, ThumbsUp, Heart, AlertCircle, Loader2 } from 'lucide-react';
-import { api } from '../lib/api';
+// src/pages/FeedbackPage.tsx
 
-export default function Feedback() {
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { MessageSquare, Send, Star, Heart, AlertCircle, Loader2, Key, ThumbsUp } from 'lucide-react';
+import { api } from '../lib/api';
+import type { User, UserProfile } from '../lib/api'; // Safe type-only imports [1.1.9, 1.3.1]
+
+interface FeedbackPageProps {
+  onNavigate: (page: string) => void;
+  isAuthenticated: boolean;
+  user: User | null;
+  profile: UserProfile | null;
+}
+
+export default function FeedbackPage({ onNavigate, isAuthenticated, user, profile }: FeedbackPageProps) {
   const [rating, setRating] = useState<number | null>(null);
-  const[hoveredRating, setHoveredRating] = useState<number | null>(null);
-  const[submitted, setSubmitted] = useState(false);
+  const [hoveredRating, setHoveredRating] = useState<number | null>(null);
+  const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -14,6 +24,14 @@ export default function Feedback() {
   const [email, setEmail] = useState('');
   const [type, setType] = useState('Feature');
   const [message, setMessage] = useState('');
+
+  // ⚠️ MODIFICATION: Automatically pre-populate profile data if the session is active
+  useEffect(() => {
+    if (isAuthenticated && profile && user) {
+      setName(profile.username || '');
+      setEmail(user.email || '');
+    }
+  }, [isAuthenticated, profile, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,14 +49,40 @@ export default function Feedback() {
       setSubmitted(true);
       // Reset form
       setRating(null);
-      setName('');
-      setEmail('');
+      setName(profile?.username || '');
+      setEmail(user?.email || '');
       setType('Feature');
       setMessage('');
     } else {
       setErrorMsg(res.error || 'Failed to submit feedback. Please try again.');
     }
   };
+
+  // Render Unauthenticated Locked State Card
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center px-6 bg-neutral-950">
+        <div className="relative text-center p-12 rounded-[48px] bg-gradient-to-br from-[#00AAFF]/5 via-neutral-900 to-neutral-950 border border-white/5 shadow-2xl shadow-[#00AAFF]/5 max-w-lg overflow-hidden">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-[#00AAFF]/10 rounded-full blur-3xl -translate-y-1/2 pointer-events-none" />
+          <div className="relative z-10 space-y-6">
+            <div className="w-16 h-14 rounded-full bg-[#00AAFF]/10 border border-[#00AAFF]/30 flex items-center justify-center mx-auto mb-4 text-[#00AAFF]">
+              <MessageSquare className="w-7 h-7" />
+            </div>
+            <h2 className="text-3xl font-black text-white">Join the Discussion</h2>
+            <p className="text-neutral-400 text-sm leading-relaxed font-medium">
+              To keep our feedback channel premium, spam-free, and directly synchronized with actual rendering pipelines, we require you to be logged in to submit feedback [1.2.4].
+            </p>
+            <button
+              onClick={() => onNavigate('signin')}
+              className="px-8 py-3.5 bg-[#00AAFF] hover:bg-white text-neutral-950 rounded-2xl font-bold text-xs uppercase tracking-wide transition-all shadow-md shadow-[#00AAFF]/15"
+            >
+              Sign In to Your Profile
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (submitted) {
     return (
@@ -48,17 +92,13 @@ export default function Feedback() {
           animate={{ opacity: 1, scale: 1 }}
           className="relative text-center p-12 rounded-[48px] bg-gradient-to-br from-[#00AAFF]/10 via-neutral-900 to-neutral-950 border border-white/10 shadow-2xl shadow-[#00AAFF]/5 max-w-lg overflow-hidden"
         >
-          {/* Subtle Glow Orbs */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-[#00AAFF]/20 rounded-full blur-3xl -translate-y-1/2 pointer-events-none" />
 
           <div className="relative z-10">
             <div className="w-20 h-20 bg-[#00AAFF]/10 border border-[#00AAFF]/20 text-[#00AAFF] rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-lg shadow-[#00AAFF]/20">
               <Heart className="w-10 h-10 fill-current" />
             </div>
-            <h2 className="text-3xl font-black text-white mb-4">Thank you for the love!</h2>
-            <p className="text-neutral-400 font-medium mb-8 text-lg leading-relaxed">
-              Your feedback helps us make Ixnel better for everyone. We've received your thoughts and will review them shortly.
-            </p>
+            <h2 className="text-3xl font-black text-white mb-4">Thank you for the feedback!</h2>
             <button 
               onClick={() => setSubmitted(false)}
               className="px-8 py-4 bg-[#00AAFF] text-neutral-950 rounded-2xl font-bold hover:bg-white hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[#00AAFF]/25"
@@ -94,8 +134,6 @@ export default function Feedback() {
           {/* Form Side */}
           <div className="lg:col-span-2">
             <form onSubmit={handleSubmit} className="relative space-y-8 bg-black/20 p-10 rounded-[40px] border border-white/5 shadow-2xl shadow-[#00AAFF]/5 overflow-hidden">
-              
-              {/* Subtle top edge glow */}
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00AAFF]/30 to-transparent" />
 
               {errorMsg && (

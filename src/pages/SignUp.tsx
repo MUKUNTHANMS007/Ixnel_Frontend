@@ -252,11 +252,8 @@ export default function SignUp({ onNavigate, onAuthSuccess }: SignUpProps) {
       const response = await authAPI.register(payload);
       setIsLoading(false);
 
-      if (response.success && response.data) {
-        if (response.data.accessToken) localStorage.setItem('accessToken', response.data.accessToken);
-        if (response.data.refreshToken) localStorage.setItem('refreshToken', response.data.refreshToken);
-        onAuthSuccess();
-
+      // ⚠️ MODIFICATION: Success response triggers a prompt to check inbox — no tokens are saved yet until verification occurs
+      if (response.success) {
         setShowSuccess({
           email: email.trim(),
           username: username.trim(),
@@ -283,38 +280,37 @@ export default function SignUp({ onNavigate, onAuthSuccess }: SignUpProps) {
   if (showSuccess.isShown) {
     return (
       <div className="w-full min-h-[80vh] flex items-center justify-center px-4 py-12 relative">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-green-500/5 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#00AAFF]/5 blur-[120px] rounded-full pointer-events-none" />
         <div className="relative z-10 w-full max-w-md p-8 bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl shadow-black/50 overflow-hidden">
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-green-500/30 to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00AAFF]/30 to-transparent" />
           <div className="text-center space-y-6 relative z-10 py-8">
             <div className="flex justify-center">
-              <div className="w-16 h-16 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center animate-pulse">
-                <Check className="w-8 h-8 text-green-400" />
+              <div className="w-16 h-16 rounded-full bg-[#00AAFF]/20 border border-[#00AAFF]/40 flex items-center justify-center animate-pulse">
+                <Mail className="w-8 h-8 text-[#00AAFF]" />
               </div>
             </div>
             <div>
-              <h2 className="text-2xl font-black text-white mb-2 tracking-tight">Welcome to Ixnel! 🎉</h2>
-              <p className="text-neutral-400">Your account has been successfully created</p>
+              <h2 className="text-2xl font-black text-white mb-2 tracking-tight">Verify Your Inbox! 🚀</h2>
+              <p className="text-neutral-400 text-sm">We sent an activation link to complete your signup.</p>
             </div>
             <div className="space-y-3 bg-black/30 rounded-xl p-4 border border-white/5">
               <div className="flex items-center gap-3">
                 <Mail className="w-4 h-4 text-neutral-500 flex-shrink-0" />
-                <span className="text-sm text-neutral-300">{showSuccess.email}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <User className="w-4 h-4 text-neutral-500 flex-shrink-0" />
-                <span className="text-sm text-neutral-300">@{showSuccess.username}</span>
+                <span className="text-sm text-neutral-300 select-all font-semibold">{showSuccess.email}</span>
               </div>
             </div>
+            <p className="text-xs text-neutral-500 font-semibold leading-relaxed px-4">
+              Please click the link inside that email to activate your <strong className="text-[#00AAFF] font-bold">Ixnel account workspace</strong> and start rendering. This link will remain valid for <strong className="text-[#00AAFF] font-bold">24 hours</strong>.
+            </p>
             <div className="space-y-2 pt-4">
               <button
                 onClick={() => {
                   setShowSuccess({ ...showSuccess, isShown: false });
                   onNavigate('signin');
                 }}
-                className="w-full flex items-center justify-center gap-2.5 py-3 bg-[#00AAFF] text-neutral-950 rounded-xl font-bold text-sm tracking-wide hover:bg-white transition-all duration-200 shadow-lg shadow-[#00AAFF]/25 hover:shadow-white/10 hover:scale-[1.02] active:scale-[0.98]"
+                className="w-full flex items-center justify-center gap-2.5 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-bold text-sm tracking-wide transition-all duration-200"
               >
-                Sign in now
+                Back to Sign In
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -439,7 +435,7 @@ export default function SignUp({ onNavigate, onAuthSuccess }: SignUpProps) {
   return (
     <div className="w-full min-h-[80vh] flex items-center justify-center px-4 py-12 relative">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#00AAFF]/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="relative z-10 w-full max-w-md p-8 bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl shadow-black/50 overflow-hidden max-h-[90vh] overflow-y-auto">
+     <div className="relative z-10 w-full max-w-md p-8 bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl shadow-black/50 overflow-hidden">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00AAFF]/30 to-transparent" />
         <div className="text-center mb-8 relative z-10">
           <h1 className="text-3xl font-black text-white mb-2 tracking-tight">Create an account</h1>

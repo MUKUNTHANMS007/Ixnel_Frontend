@@ -320,15 +320,16 @@ export const authAPI = {
     });
   },
 
-  me: async (token: string): Promise<ApiResponse<MeResponse>> => {
+me: async (token: string): Promise<ApiResponse<MeResponse>> => {
     return api<MeResponse>('/auth/me', {
       method : 'GET',
       token,
     });
   },
 
-  verifyEmail: async (token: string): Promise<ApiResponse> => {
-    return api(`/auth/verify-email?token=${encodeURIComponent(token)}`);
+  // ⚠️ MODIFICATION: Update verification API endpoint type to return AuthResponse on success
+  verifyEmail: async (token: string): Promise<ApiResponse<AuthResponse>> => {
+    return api<AuthResponse>(`/auth/verify-email?token=${encodeURIComponent(token)}`);
   },
 
   forgotPassword: async (email: string): Promise<ApiResponse> => {

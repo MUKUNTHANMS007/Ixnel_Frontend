@@ -270,12 +270,7 @@ export default function SignIn({ onNavigate, onAuthSuccess }: SignInProps) {
         setPassword('');
         setTimeout(() => onNavigate('profile'), 2000);
       } else {
-        if (response.error?.includes('Invalid email or password') || response.error?.includes('not found')) {
-          setError('No account found matching these credentials. Redirecting to Sign Up...');
-          setTimeout(() => onNavigate('signup'), 2500);
-        } else {
-          setError(response.error || 'Login failed.');
-        }
+          setError(response.error || 'No account found matching these credentials.');
       }
     } catch (err) {
       setIsLoading(false);
